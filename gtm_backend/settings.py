@@ -63,7 +63,7 @@ ROOT_URLCONF = 'gtm_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / "templates"],
+        'DIRS': ([BASE_DIR / "templates_jazzmin", BASE_DIR / "templates"] if HAS_JAZZMIN else [BASE_DIR / "templates"]),
         'APP_DIRS': True,
         'OPTIONS': {
             'builtins': [
