@@ -25,12 +25,7 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 HAS_JAZZMIN = False
-try:
-    import jazzmin  # noqa: F401
-
-    HAS_JAZZMIN = True
-except Exception:
-    HAS_JAZZMIN = False
+HAS_JAZZMIN = False
 
 
 # Application definition
@@ -61,7 +56,7 @@ ROOT_URLCONF = 'gtm_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': ([BASE_DIR / "templates_jazzmin", BASE_DIR / "templates"] if HAS_JAZZMIN else [BASE_DIR / "templates"]),
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'builtins': [
@@ -140,12 +135,3 @@ MEDIA_ROOT = BASE_DIR / "media"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-if HAS_JAZZMIN:
-    JAZZMIN_SETTINGS = {
-        "site_title": "GTM Админка",
-        "site_header": "GTM Администрирование",
-        "site_brand": "GTM админ",
-        "welcome_sign": "Добро пожаловать в панель управления",
-        "copyright": "GTM",
-    }
