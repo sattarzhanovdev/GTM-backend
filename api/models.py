@@ -58,7 +58,7 @@ class ApartmentMember(models.Model):
 
 
 class Notification(models.Model):
-    apartment = models.PositiveIntegerField(verbose_name="Квартира")
+    apartment = models.PositiveIntegerField(verbose_name="Квартира", null=True, blank=True)
     title = models.CharField("Заголовок", max_length=200)
     body = models.TextField("Текст", blank=True, default="")
     is_read = models.BooleanField("Прочитано", default=False)
@@ -71,7 +71,7 @@ class Notification(models.Model):
         indexes = [models.Index(fields=["apartment"]), models.Index(fields=["created_at"])]
 
     def __str__(self) -> str:
-        return f"{self.title} (apt {self.apartment})"
+        return f"{self.title} ({'всем' if self.apartment is None else f'кв {self.apartment}'})"
 
 
 class PushDevice(models.Model):

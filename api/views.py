@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
+from django.db.models import Q
 
 from .auth import USERNAME_RE, issue_token, json_error, parse_json_body, require_auth
 from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
@@ -149,7 +150,7 @@ def me(request):
 @require_auth
 def notifications(request):
     profile: Profile = request.profile
-    qs = Notification.objects.filter(apartment=profile.apartment).order_by("-created_at")
+    qs = Notification.objects.filter(Q(apartment=profile.apartment) | Q(apartment__isnull=True)).order_by("-created_at")
     items = [
         {
             "id": n.id,
@@ -157,6 +158,7 @@ def notifications(request):
             "body": n.body,
             "is_read": n.is_read,
             "created_at": _local_dt_iso(n.created_at),
+            "apartment": n.apartment,
         }
         for n in qs
     ]

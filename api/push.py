@@ -19,14 +19,15 @@ def _chunked(items: list[str], size: int) -> Iterable[list[str]]:
 
 def send_push_for_notification(notification: Notification) -> dict:
     """
-    Отправляет push (Expo) всем активным устройствам квартиры.
+    Отправляет push (Expo) всем активным устройствам квартиры,
+    либо всем устройствам (если квартира не указана).
     Возвращает сводку по отправке.
     """
-    tokens = list(
-        PushDevice.objects.filter(apartment=notification.apartment, is_active=True)
-        .values_list("token", flat=True)
-        .order_by("id")
-    )
+    q = PushDevice.objects.filter(is_active=True)
+    if notification.apartment is not None:
+        q = q.filter(apartment=notification.apartment)
+
+    tokens = list(q.values_list("token", flat=True).order_by("id"))
     if not tokens:
         return {"ok": True, "sent": 0, "detail": "no devices"}
 
@@ -74,4 +75,3 @@ def send_push_for_notification(notification: Notification) -> dict:
     notification.save(update_fields=["push_sent_at"])
 
     return {"ok": not errors, "sent": sent, "errors": errors[:20]}
-
