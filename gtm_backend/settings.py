@@ -35,9 +35,7 @@ except Exception:
 
 # Application definition
 
-INSTALLED_APPS = ([
-    "jazzmin",
-] if HAS_JAZZMIN else []) + [
+INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
