@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, Receipt
+from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
+from .push import send_push_for_notification
 
 
 @admin.register(Profile)
@@ -22,10 +23,33 @@ class ApartmentMemberAdmin(admin.ModelAdmin):
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ("title", "apartment", "is_read", "created_at")
+    list_display = ("title", "apartment", "is_read", "push_sent_at", "created_at")
     list_filter = ("apartment", "is_read")
     search_fields = ("title", "body")
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_at", "push_sent_at")
+    actions = ("send_push_selected",)
+
+    def save_model(self, request, obj: Notification, form, change):
+        super().save_model(request, obj, form, change)
+        # Отправляем push только при создании (или если ещё не отправляли).
+        if obj.push_sent_at is None:
+            send_push_for_notification(obj)
+
+    @admin.action(description="Отправить push выбранным")
+    def send_push_selected(self, request, queryset):
+        sent_total = 0
+        for n in queryset:
+            res = send_push_for_notification(n)
+            sent_total += int(res.get("sent") or 0)
+        self.message_user(request, f"Отправлено push: {sent_total}")
+
+
+@admin.register(PushDevice)
+class PushDeviceAdmin(admin.ModelAdmin):
+    list_display = ("apartment", "entrance", "platform", "is_active", "token", "updated_at")
+    list_filter = ("platform", "is_active", "apartment")
+    search_fields = ("token",)
+    readonly_fields = ("created_at", "updated_at")
 
 
 class ReceiptInline(admin.TabularInline):

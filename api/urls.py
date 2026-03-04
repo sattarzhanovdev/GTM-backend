@@ -19,6 +19,9 @@ urlpatterns = [
     path("payments/history/", views.payments_history, name="payments_history"),
     path("payments/<int:payment_id>/receipt/", views.payments_attach_receipt, name="payments_attach_receipt"),
 
+    # Push
+    path("push/register/", views.push_register, name="push_register"),
+
     # Devices
     path("devices/status/", views.devices_status, name="devices_status"),
     path("devices/gate/open/", views.devices_gate_open, name="devices_gate_open"),

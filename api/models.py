@@ -62,6 +62,7 @@ class Notification(models.Model):
     title = models.CharField("Заголовок", max_length=200)
     body = models.TextField("Текст", blank=True, default="")
     is_read = models.BooleanField("Прочитано", default=False)
+    push_sent_at = models.DateTimeField("Push отправлен", null=True, blank=True)
     created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
 
     class Meta:
@@ -71,6 +72,25 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} (apt {self.apartment})"
+
+
+class PushDevice(models.Model):
+    token = models.CharField("Expo push token", max_length=255, unique=True)
+    apartment = models.PositiveIntegerField(verbose_name="Квартира")
+    entrance = models.PositiveIntegerField(verbose_name="Подъезд")
+    platform = models.CharField("Платформа", max_length=20, blank=True, default="")
+    is_active = models.BooleanField("Активно", default=True)
+
+    created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Устройство (push)"
+        verbose_name_plural = "Устройства (push)"
+        indexes = [models.Index(fields=["apartment"]), models.Index(fields=["is_active"])]
+
+    def __str__(self) -> str:
+        return f"{self.apartment} {self.platform} {self.token[:18]}…"
 
 
 class PaymentCharge(models.Model):

@@ -24,11 +24,20 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
+HAS_JAZZMIN = False
+try:
+    import jazzmin  # noqa: F401
+
+    HAS_JAZZMIN = True
+except Exception:
+    HAS_JAZZMIN = False
+
 
 # Application definition
 
-INSTALLED_APPS = [
-    'jazzmin',
+INSTALLED_APPS = ([
+    "jazzmin",
+] if HAS_JAZZMIN else []) + [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -134,10 +143,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-JAZZMIN_SETTINGS = {
-    "site_title": "GTM Админка",
-    "site_header": "GTM Администрирование",
-    "site_brand": "GTM админ",
-    "welcome_sign": "Добро пожаловать в панель управления",
-    "copyright": "GTM",
-}
+if HAS_JAZZMIN:
+    JAZZMIN_SETTINGS = {
+        "site_title": "GTM Админка",
+        "site_header": "GTM Администрирование",
+        "site_brand": "GTM админ",
+        "welcome_sign": "Добро пожаловать в панель управления",
+        "copyright": "GTM",
+    }

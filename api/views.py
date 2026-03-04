@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .auth import USERNAME_RE, issue_token, json_error, parse_json_body, require_auth
-from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, Receipt
+from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 
 
 STATUS_TEXT_RU = {
@@ -325,6 +325,33 @@ def payments_attach_receipt(request, payment_id: int):
     part.save(update_fields=["status", "status_updated_at", "entrance"])
 
     return JsonResponse({"ok": True, "receipt": {"id": receipt.id}})
+
+
+@csrf_exempt
+@require_POST
+@require_auth
+def push_register(request):
+    profile: Profile = request.profile
+    payload = parse_json_body(request)
+    if payload is None:
+        return json_error("Неверный JSON в теле запроса", status=400)
+
+    token = str(payload.get("token") or "").strip()
+    platform = str(payload.get("platform") or "").strip()
+
+    if not token:
+        return json_error("Нужно поле token", status=400)
+
+    PushDevice.objects.update_or_create(
+        token=token,
+        defaults={
+            "apartment": profile.apartment,
+            "entrance": profile.entrance,
+            "platform": platform,
+            "is_active": True,
+        },
+    )
+    return JsonResponse({"ok": True})
 
 
 def _pulse(key: str, seconds: int = 1):
