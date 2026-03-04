@@ -2,6 +2,17 @@
 {% load i18n static jazzmin %}
 {% get_jazzmin_ui_tweaks as jazzmin_ui %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    /* Safety net: if AdminLTE layout CSS isn't applied for some reason,
+       keep the sidebar fixed and content aligned. */
+    .main-sidebar { position: fixed !important; top: 0; bottom: 0; overflow-y: auto; }
+    .content-wrapper { margin-left: 250px !important; }
+    @media (max-width: 991.98px) { .content-wrapper { margin-left: 0 !important; } }
+  </style>
+{% endblock %}
+
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 
 {% block content_title %}Панель управления{% endblock %}
@@ -310,4 +321,3 @@
     })();
   </script>
 {% endblock %}
-
