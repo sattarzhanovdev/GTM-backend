@@ -6,6 +6,7 @@ from typing import Iterable
 
 from django.utils import timezone
 
+from .fcm import get_fcm_config, send_fcm_notification
 from .models import Notification, PushDevice
 
 
@@ -20,16 +21,20 @@ def _chunked(items: list[str], size: int) -> Iterable[list[str]]:
 
 def send_push_for_notification(notification: Notification) -> dict:
     """
-    Отправляет push (Expo) всем активным устройствам квартиры,
+    Отправляет push всем активным устройствам квартиры,
     либо всем устройствам (если квартира не указана).
+
+    Поддерживает:
+    - FCM (HTTP v1) для token_type='fcm'
+    - Expo Push API для token_type='expo' (в основном для Expo Go/старых сборок)
     Возвращает сводку по отправке.
     """
     q = PushDevice.objects.filter(is_active=True)
     if notification.apartment is not None:
         q = q.filter(apartment=notification.apartment)
 
-    tokens = list(q.values_list("token", flat=True).order_by("id"))
-    if not tokens:
+    devices = list(q.values("token", "token_type").order_by("id"))
+    if not devices:
         return {"ok": True, "sent": 0, "detail": "no devices"}
 
     sent = 0
@@ -37,8 +42,28 @@ def send_push_for_notification(notification: Notification) -> dict:
     ticket_ids: list[str] = []
     ticket_to_token: dict[str, str] = {}
 
+    # 1) FCM (Android standalone)
+    fcm_cfg = get_fcm_config()
+    fcm_tokens = [d["token"] for d in devices if d.get("token_type") == PushDevice.TokenType.FCM]
+    if fcm_tokens and not fcm_cfg:
+        errors.append("FCM не настроен: нет FCM_SERVICE_ACCOUNT_JSON/FCM_SERVICE_ACCOUNT_FILE")
+    if fcm_cfg:
+        for t in fcm_tokens:
+            try:
+                send_fcm_notification(
+                    cfg=fcm_cfg,
+                    token=t,
+                    title=notification.title,
+                    body=notification.body or "",
+                    data={"notificationId": notification.id, "apartment": notification.apartment or ""},
+                )
+                sent += 1
+            except Exception as e:
+                errors.append(str(e))
+
     # Expo рекомендует отправлять батчами.
-    for batch in _chunked(tokens, 90):
+    expo_tokens = [d["token"] for d in devices if d.get("token_type") == PushDevice.TokenType.EXPO]
+    for batch in _chunked(expo_tokens, 90):
         messages = [
             {
                 "to": t,

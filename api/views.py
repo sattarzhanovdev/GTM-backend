@@ -340,13 +340,22 @@ def push_register(request):
 
     token = str(payload.get("token") or "").strip()
     platform = str(payload.get("platform") or "").strip()
+    token_type = str(payload.get("tokenType") or payload.get("token_type") or "").strip().lower()
 
     if not token:
         return json_error("Нужно поле token", status=400)
 
+    if not token_type:
+        # авто-определение для обратной совместимости
+        token_type = "expo" if token.startswith("ExponentPushToken") else "fcm"
+
+    if token_type not in (PushDevice.TokenType.EXPO, PushDevice.TokenType.FCM):
+        return json_error("Неверный tokenType (должен быть 'expo' или 'fcm')", status=400)
+
     PushDevice.objects.update_or_create(
         token=token,
         defaults={
+            "token_type": token_type,
             "apartment": profile.apartment,
             "entrance": profile.entrance,
             "platform": platform,

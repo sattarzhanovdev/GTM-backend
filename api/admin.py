@@ -62,8 +62,8 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(PushDevice)
 class PushDeviceAdmin(admin.ModelAdmin):
-    list_display = ("apartment", "entrance", "platform", "is_active", "token", "updated_at")
-    list_filter = ("platform", "is_active", "apartment")
+    list_display = ("apartment", "entrance", "platform", "token_type", "is_active", "token", "updated_at")
+    list_filter = ("platform", "token_type", "is_active", "apartment")
     search_fields = ("token",)
     readonly_fields = ("created_at", "updated_at")
 

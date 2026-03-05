@@ -75,7 +75,12 @@ class Notification(models.Model):
 
 
 class PushDevice(models.Model):
+    class TokenType(models.TextChoices):
+        EXPO = "expo", "Expo"
+        FCM = "fcm", "FCM"
+
     token = models.CharField("Expo push token", max_length=255, unique=True)
+    token_type = models.CharField("Тип токена", max_length=10, choices=TokenType.choices, default=TokenType.EXPO)
     apartment = models.PositiveIntegerField(verbose_name="Квартира")
     entrance = models.PositiveIntegerField(verbose_name="Подъезд")
     platform = models.CharField("Платформа", max_length=20, blank=True, default="")
@@ -87,10 +92,14 @@ class PushDevice(models.Model):
     class Meta:
         verbose_name = "Устройство (push)"
         verbose_name_plural = "Устройства (push)"
-        indexes = [models.Index(fields=["apartment"]), models.Index(fields=["is_active"])]
+        indexes = [
+            models.Index(fields=["apartment"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["token_type"]),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.apartment} {self.platform} {self.token[:18]}…"
+        return f"{self.apartment} {self.platform} {self.token_type} {self.token[:18]}…"
 
 
 class PaymentCharge(models.Model):
