@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
+import urllib.error
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -105,7 +106,15 @@ def send_fcm_notification(
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw) if raw else {}
-
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode("utf-8")
+        except Exception:
+            body = ""
+        # Try to surface Google error message to the admin UI.
+        raise RuntimeError(f"FCM HTTP {e.code}: {body or e.reason}") from e

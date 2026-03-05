@@ -17,6 +17,10 @@ venv/
 db.sqlite3
 db.sqlite3-journal
 
+## Secrets (FCM)
+serviceAccountKey.json
+*Firebase Admin SDK*.json
+
 ## Logs
 *.log
 
@@ -24,4 +28,3 @@ db.sqlite3-journal
 .DS_Store
 .idea/
 .vscode/
-
