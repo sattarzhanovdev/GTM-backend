@@ -188,3 +188,25 @@ class DevicePulse(models.Model):
         if not self.active_until:
             return False
         return timezone.now() < self.active_until
+
+
+class AccountDeletionRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Ожидает"
+        DONE = "done", "Обработано"
+        REJECTED = "rejected", "Отклонено"
+
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="deletion_requests", verbose_name="Профиль")
+    reason = models.CharField("Причина", max_length=300, blank=True, default="")
+    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
+
+    created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
+    processed_at = models.DateTimeField("Обработано", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Запрос на удаление аккаунта"
+        verbose_name_plural = "Запросы на удаление аккаунта"
+        indexes = [models.Index(fields=["status"]), models.Index(fields=["created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.profile.user.username} ({self.status})"

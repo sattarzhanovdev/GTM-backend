@@ -11,7 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.db.models import Q
 
 from .auth import USERNAME_RE, issue_token, json_error, parse_json_body, require_auth
-from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
+from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 
 
 STATUS_TEXT_RU = {
@@ -77,16 +77,23 @@ def login(request):
     apartment = match.group("apartment")
     entrance = match.group("entrance")
 
-    # бизнес-правило: пароль = номер квартиры
-    if password != apartment:
-        return json_error("Неверный логин или пароль", status=401)
+    # бизнес-правило по умолчанию: пароль = номер квартиры.
+    # Но если пользователь создан/изменён через админку, разрешаем вход по реальному паролю Django.
+    try:
+        user = User.objects.get(username=username)
+        created = False
+    except User.DoesNotExist:
+        user = None
+        created = True
 
-    user, created = User.objects.get_or_create(username=username)
     if created:
-        user.set_password(password)
-        user.save(update_fields=["password"])
+        # Для новых пользователей сохраняем старое правило: пароль должен быть равен номеру квартиры.
+        if password != apartment:
+            return json_error("Неверный логин или пароль", status=401)
+        user = User.objects.create_user(username=username, password=password)
     else:
-        if not user.check_password(password):
+        assert user is not None
+        if password != apartment and not user.check_password(password):
             return json_error("Неверный логин или пароль", status=401)
 
     profile, _ = Profile.objects.get_or_create(
@@ -362,6 +369,23 @@ def push_register(request):
             "is_active": True,
         },
     )
+    return JsonResponse({"ok": True})
+
+
+@csrf_exempt
+@require_POST
+@require_auth
+def account_delete_request(request):
+    profile: Profile = request.profile
+    payload = parse_json_body(request) or {}
+    reason = str(payload.get("reason") or "").strip()
+
+    # Не плодим бесконечные заявки
+    exists = AccountDeletionRequest.objects.filter(profile=profile, status=AccountDeletionRequest.Status.PENDING).exists()
+    if exists:
+        return JsonResponse({"ok": True, "detail": "already pending"})
+
+    AccountDeletionRequest.objects.create(profile=profile, reason=reason, created_at=timezone.now())
     return JsonResponse({"ok": True})
 
 

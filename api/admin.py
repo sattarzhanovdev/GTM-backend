@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
+from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 from .push import send_push_for_notification
 
 
@@ -134,3 +134,11 @@ class DevicePulseAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Активен")
     def is_active_admin(self, obj: DevicePulse) -> bool:
         return obj.is_active()
+
+
+@admin.register(AccountDeletionRequest)
+class AccountDeletionRequestAdmin(admin.ModelAdmin):
+    list_display = ("profile", "status", "created_at", "processed_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("profile__user__username", "profile__phone_number", "reason")
+    readonly_fields = ("created_at",)

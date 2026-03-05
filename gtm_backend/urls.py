@@ -20,9 +20,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 from api.admin_analytics import admin_analytics
+from .public_views import privacy_policy
 
 urlpatterns = [
     path("admin/analytics/", admin_analytics, name="admin_analytics"),
+    path("privacy/", privacy_policy, name="privacy_policy"),
     path('admin/', admin.site.urls),
     path("api/", include("api.urls")),
 ]
