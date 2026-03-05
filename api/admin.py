@@ -33,15 +33,31 @@ class NotificationAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         # Отправляем push только при создании (или если ещё не отправляли).
         if obj.push_sent_at is None:
-            send_push_for_notification(obj)
+            res = send_push_for_notification(obj)
+            if not res.get("ok"):
+                self.message_user(
+                    request,
+                    f"Push отправлен с ошибками. sent={res.get('sent')}, пример: {(res.get('errors') or [''])[0]}",
+                    level="warning",
+                )
 
     @admin.action(description="Отправить push выбранным")
     def send_push_selected(self, request, queryset):
         sent_total = 0
+        error_total = 0
+        first_error = ""
         for n in queryset:
             res = send_push_for_notification(n)
             sent_total += int(res.get("sent") or 0)
-        self.message_user(request, f"Отправлено push: {sent_total}")
+            errs = res.get("errors") or []
+            if errs:
+                error_total += len(errs)
+                if not first_error:
+                    first_error = str(errs[0])
+        msg = f"Отправлено push: {sent_total}"
+        if error_total:
+            msg += f" (ошибок: {error_total}, пример: {first_error})"
+        self.message_user(request, msg)
 
 
 @admin.register(PushDevice)
