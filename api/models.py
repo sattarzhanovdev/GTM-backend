@@ -210,3 +210,67 @@ class AccountDeletionRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.profile.user.username} ({self.status})"
+
+
+class ExpenseCategory(models.Model):
+    name = models.CharField("Название", max_length=120, unique=True)
+    sort_order = models.PositiveIntegerField("Порядок", default=100)
+    is_active = models.BooleanField("Активно", default=True)
+    created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
+
+    class Meta:
+        verbose_name = "Категория расходов"
+        verbose_name_plural = "Категории расходов"
+        ordering = ["sort_order", "name"]
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["sort_order"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Expense(models.Model):
+    category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name="expenses",
+        verbose_name="Категория",
+    )
+    amount = models.PositiveIntegerField("Сумма")
+    currency = models.CharField("Валюта", max_length=16, default="сом")
+    occurred_at = models.DateField("Дата")
+    note = models.CharField("Комментарий", max_length=300, blank=True, default="")
+    created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
+
+    class Meta:
+        verbose_name = "Расход"
+        verbose_name_plural = "Расходы"
+        indexes = [
+            models.Index(fields=["occurred_at"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["currency"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.category}: {self.amount} {self.currency} ({self.occurred_at})"
+
+
+class FundOpeningBalance(models.Model):
+    month = models.DateField("Месяц", help_text="Первый день месяца (например 2026-01-01)", unique=True)
+    amount = models.IntegerField("Остаток на начало месяца")
+    currency = models.CharField("Валюта", max_length=16, default="сом")
+    created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Остаток фонда (месяц)"
+        verbose_name_plural = "Остатки фонда (месяцы)"
+        indexes = [
+            models.Index(fields=["month"]),
+            models.Index(fields=["currency"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.month}: {self.amount} {self.currency}"

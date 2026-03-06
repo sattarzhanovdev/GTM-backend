@@ -1,7 +1,20 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
+from .models import (
+    AccountDeletionRequest,
+    ApartmentMember,
+    DevicePulse,
+    Expense,
+    ExpenseCategory,
+    FundOpeningBalance,
+    Notification,
+    PaymentCharge,
+    PaymentParticipation,
+    Profile,
+    PushDevice,
+    Receipt,
+)
 from .push import send_push_for_notification
 
 
@@ -142,3 +155,30 @@ class AccountDeletionRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("profile__user__username", "profile__phone_number", "reason")
     readonly_fields = ("created_at",)
+
+
+@admin.register(ExpenseCategory)
+class ExpenseCategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "sort_order", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name",)
+    readonly_fields = ("created_at",)
+    ordering = ("sort_order", "name")
+
+
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ("occurred_at", "category", "amount", "currency", "note", "created_at")
+    list_filter = ("currency", "category", "occurred_at")
+    search_fields = ("note", "category__name")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "occurred_at"
+
+
+@admin.register(FundOpeningBalance)
+class FundOpeningBalanceAdmin(admin.ModelAdmin):
+    list_display = ("month", "amount", "currency", "updated_at")
+    list_filter = ("currency",)
+    search_fields = ("month",)
+    readonly_fields = ("created_at", "updated_at")
+    date_hierarchy = "month"

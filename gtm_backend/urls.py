@@ -20,12 +20,13 @@ from django.contrib import admin
 from django.urls import include, path
 
 from api.admin_analytics import admin_analytics
-from api.admin_reports import apartment_search_payments_report
+from api.admin_reports import apartment_search_payments_report, expenses_report
 from .public_views import privacy_policy
 
 urlpatterns = [
     path("admin/analytics/", admin_analytics, name="admin_analytics"),
     path("admin/reports/apartment-search-payments/", apartment_search_payments_report, name="apartment_search_payments_report"),
+    path("admin/reports/expenses/", expenses_report, name="expenses_report"),
     path("privacy/", privacy_policy, name="privacy_policy"),
     path('admin/', admin.site.urls),
     path("api/", include("api.urls")),

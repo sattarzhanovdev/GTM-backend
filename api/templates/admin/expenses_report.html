@@ -1,0 +1,266 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Расходы и фонд{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .crm-wrap { max-width: 1500px; }
+    .crm-subtle { color: var(--body-quiet-color, #666); }
+    .crm-header { display:flex; gap:12px; align-items:baseline; justify-content:space-between; flex-wrap:wrap; margin-bottom: 14px; }
+    .crm-title { margin: 0; }
+    .crm-actions { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+
+    .crm-grid { display:grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .crm-grid { grid-template-columns: 1fr; } }
+
+    .crm-card { background: var(--body-bg, #fff); border: 1px solid var(--hairline-color, #ddd); border-radius: 12px; box-shadow: 0 1px 0 rgba(0,0,0,.03); }
+    .crm-card-h { padding: 14px 14px 10px 14px; border-bottom: 1px solid var(--hairline-color, #eee); display:flex; align-items:center; justify-content:space-between; gap: 10px; }
+    .crm-card-b { padding: 14px; }
+    .crm-kpis { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 1100px) { .crm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { .crm-kpis { grid-template-columns: 1fr; } }
+    .crm-kpi { padding: 12px; border-radius: 12px; border: 1px solid var(--hairline-color, #eee); background: color-mix(in oklab, var(--body-bg, #fff) 92%, var(--primary, #0b57d0) 8%); }
+    .crm-kpi .k { font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: var(--body-quiet-color, #666); }
+    .crm-kpi .v { font-size: 20px; font-weight: 700; margin-top: 6px; }
+    .crm-kpi .s { font-size: 12px; margin-top: 2px; color: var(--body-quiet-color, #666); }
+
+    .crm-form label { display:block; font-weight: 650; margin-bottom: 6px; }
+    .crm-form input[type="text"],
+    .crm-form input[type="number"],
+    .crm-form input[type="date"],
+    .crm-form select { width: 100%; box-sizing: border-box; }
+    .crm-form .hint { font-size: 12px; color: var(--body-quiet-color, #666); margin-top: 4px; }
+    .crm-form .buttons { display:flex; gap: 8px; flex-wrap: wrap; }
+    .crm-form hr { border: 0; border-top: 1px solid var(--hairline-color, #eee); margin: 14px 0; }
+    .crm-form .statuses { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .crm-form .statuses label { font-weight: 400; margin: 0; display:flex; gap: 8px; align-items:center; }
+
+    .crm-table-wrap { overflow:auto; border-radius: 12px; }
+    .crm-table { width: 100%; min-width: 1200px; border-collapse: separate; border-spacing: 0; }
+    .crm-table thead th { position: sticky; top: 0; z-index: 2; background: var(--header-bg, #f6f7f8); border-bottom: 1px solid var(--hairline-color, #ddd); padding: 10px 10px; text-align:left; font-weight: 650; white-space: nowrap; }
+    .crm-table tbody td { padding: 10px 10px; border-bottom: 1px solid var(--hairline-color, #eee); vertical-align: top; white-space: nowrap; }
+    .crm-table tbody tr:nth-child(2n) td { background: color-mix(in oklab, var(--body-bg, #fff) 96%, #000 4%); }
+    .crm-table tbody tr:hover td { background: color-mix(in oklab, var(--body-bg, #fff) 90%, var(--primary, #0b57d0) 10%); }
+    .crm-table .muted { color: var(--body-quiet-color, #666); }
+    .crm-table .row-head { font-weight: 700; }
+    .crm-table .total { font-weight: 800; color: #b91c1c; }
+    .crm-table .fund { font-weight: 800; color: #b91c1c; }
+
+    .crm-list { margin: 0; padding-left: 18px; }
+    .crm-small { font-size: 12px; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="crm-wrap">
+    <div class="crm-header">
+      <div>
+        <h1 class="crm-title">Расходы и фонд</h1>
+        <div class="crm-subtle">Помесячный отчет за {{ year }} год · валюта: {{ currency }}</div>
+      </div>
+      <div class="crm-actions">
+        <a class="button" href="?year={{ year }}&currency={{ currency }}&format=csv">CSV</a>
+      </div>
+    </div>
+
+    <div class="crm-grid">
+      <div class="crm-card">
+        <div class="crm-card-h">
+          <strong>Управление</strong>
+          <span class="crm-subtle">быстро</span>
+        </div>
+        <div class="crm-card-b">
+          <form method="get" class="crm-form">
+            <div>
+              <label for="year">Год</label>
+              <input id="year" name="year" type="number" inputmode="numeric" value="{{ year }}" />
+            </div>
+            <div style="margin-top: 10px;">
+              <label for="currency">Валюта</label>
+              <input id="currency" name="currency" type="text" value="{{ currency }}" />
+              <div class="hint">Если используете только “сом”, оставьте как есть.</div>
+            </div>
+            <div style="margin-top: 10px;">
+              <label>Доходы (из оплат): статусы</label>
+              <div class="statuses">
+                {% for value,label in income_status_choices %}
+                  <label>
+                    <input type="checkbox" name="income_status" value="{{ value }}" {% if value in income_statuses %}checked{% endif %} />
+                    <span>{{ label }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="buttons" style="margin-top: 12px;">
+              <button class="button default" type="submit">Показать</button>
+              <a class="button" href="?">Сбросить</a>
+            </div>
+          </form>
+
+          <hr />
+
+          <form method="post" class="crm-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_opening" />
+            <input type="hidden" name="currency" value="{{ currency }}" />
+            <div>
+              <label for="opening_amount">Остаток на {{ opening_date_label }}</label>
+              <input id="opening_amount" name="opening_amount" type="number" value="{{ opening_amount }}" />
+              <div class="hint">Это “ост {{ opening_date_label }}” (остаток на начало года).</div>
+            </div>
+            <div class="buttons" style="margin-top: 10px;">
+              <button class="button" type="submit">Сохранить остаток</button>
+            </div>
+          </form>
+
+          <hr />
+
+          <form method="post" class="crm-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_expense" />
+            <input type="hidden" name="currency" value="{{ currency }}" />
+            <div>
+              <label for="occurred_at">Дата расхода</label>
+              <input id="occurred_at" name="occurred_at" type="date" value="{{ today }}" />
+            </div>
+            <div style="margin-top: 10px;">
+              <label for="category_id">Категория</label>
+              <select id="category_id" name="category_id">
+                <option value="">— выбрать —</option>
+                {% for c in categories %}
+                  <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="hint">Категории создаются в админке: “Категории расходов”.</div>
+            </div>
+            <div style="margin-top: 10px;">
+              <label for="amount">Сумма</label>
+              <input id="amount" name="amount" type="number" inputmode="numeric" placeholder="например 2300" />
+            </div>
+            <div style="margin-top: 10px;">
+              <label for="note">Комментарий</label>
+              <input id="note" name="note" type="text" placeholder="например Дом.ком за март" />
+            </div>
+            <div class="buttons" style="margin-top: 12px;">
+              <button class="button default" type="submit">Добавить расход</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="crm-card">
+        <div class="crm-card-h">
+          <strong>Отчет</strong>
+          <span class="crm-subtle">как таблица в Excel</span>
+        </div>
+        <div class="crm-card-b">
+          <div class="crm-kpis">
+            <div class="crm-kpi">
+              <div class="k">Доходы за год</div>
+              <div class="v">{{ income_year_total }}</div>
+              <div class="s">{{ currency }}</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">Остаток на {{ opening_date_label }}</div>
+              <div class="v">{{ opening_amount }}</div>
+              <div class="s">{{ currency }}</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">Расходы за год</div>
+              <div class="v">{{ expense_year_total }}</div>
+              <div class="s">{{ currency }}</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">Фонд (конец года)</div>
+              <div class="v">{{ fund_year_end }}</div>
+              <div class="s">{{ currency }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="crm-table-wrap">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th style="min-width: 260px;">Статья</th>
+                {% for m in month_labels %}
+                  <th>{{ m.label }}</th>
+                {% endfor %}
+                <th>итого</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="row-head">Доходы (оплаты)</td>
+                {% for v in income_values %}
+                  <td>{{ v }}</td>
+                {% endfor %}
+                <td class="row-head">{{ income_year_total }}</td>
+              </tr>
+
+              <tr>
+                <td class="row-head muted">ост {{ opening_date_label }}</td>
+                {% for v in opening_values %}
+                  <td class="muted">{{ v }}</td>
+                {% endfor %}
+                <td class="muted row-head">{{ opening_amount }}</td>
+              </tr>
+
+              {% for r in table_rows %}
+                <tr>
+                  <td class="row-head">{{ r.label }}</td>
+                  {% for v in r.values %}
+                    <td>{{ v }}</td>
+                  {% endfor %}
+                  <td class="row-head">{{ r.row_total }}</td>
+                </tr>
+              {% endfor %}
+
+              <tr>
+                <td class="total">Итого расходы</td>
+                {% for v in expense_values %}
+                  <td class="total">{{ v }}</td>
+                {% endfor %}
+                <td class="total">{{ expense_year_total }}</td>
+              </tr>
+
+              <tr>
+                <td class="fund">Фонд (конец месяца)</td>
+                {% for v in fund_close_values %}
+                  <td class="fund">{{ v }}</td>
+                {% endfor %}
+                <td class="fund">{{ fund_year_end }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="crm-card-b crm-small crm-subtle">
+          Формула фонда: фонд(начало месяца) + доходы(оплаты) − расходы. Остаток задается на {{ opening_date_label }}.
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 16px;" class="crm-card">
+      <div class="crm-card-h">
+        <strong>Последние расходы</strong>
+        <span class="crm-subtle">до 50 записей</span>
+      </div>
+      <div class="crm-card-b">
+        {% if latest_expenses %}
+          <ul class="crm-list">
+            {% for e in latest_expenses %}
+              <li>
+                <strong>{{ e.occurred_at }}</strong> · {{ e.category.name }} · <strong>{{ e.amount }}</strong> {{ e.currency }}
+                {% if e.note %}· <span class="crm-subtle">{{ e.note }}</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="crm-subtle">Пока нет расходов за {{ year }} год.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
