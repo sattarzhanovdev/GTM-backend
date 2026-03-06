@@ -1,0 +1,115 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Отчет: оплаты поиска квартиры{% endblock %}
+
+{% block content %}
+  <h1>Отчет: оплаты поиска квартиры</h1>
+
+  <form method="get" style="margin: 16px 0; padding: 12px; border: 1px solid var(--hairline-color, #ddd); border-radius: 8px;">
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end;">
+      <div>
+        <label for="charge_id" style="display:block; font-weight: 600;">Начисление</label>
+        <select id="charge_id" name="charge_id">
+          <option value="">— выбрать —</option>
+          {% for c in charges %}
+            <option value="{{ c.id }}" {% if selected_charge and c.id == selected_charge.id %}selected{% endif %}>
+              #{{ c.id }} · {{ c.service_name }} · {{ c.amount }} {{ c.currency }}{% if c.due_date %} · до {{ c.due_date }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="from" style="display:block; font-weight: 600;">С</label>
+        <input id="from" name="from" type="datetime-local" value="{{ dt_from_value }}" />
+      </div>
+
+      <div>
+        <label for="to" style="display:block; font-weight: 600;">По</label>
+        <input id="to" name="to" type="datetime-local" value="{{ dt_to_value }}" />
+      </div>
+
+      <div>
+        <div style="font-weight: 600; margin-bottom: 6px;">Статусы</div>
+        <div style="display:flex; flex-wrap: wrap; gap: 10px;">
+          {% for value,label in status_choices %}
+            <label style="display:flex; gap:6px; align-items:center;">
+              <input type="checkbox" name="status" value="{{ value }}" {% if value in selected_statuses %}checked{% endif %} />
+              <span>{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <button class="button" type="submit">Показать</button>
+        <a class="button" href="?" style="margin-left: 8px;">Сбросить</a>
+      </div>
+    </div>
+  </form>
+
+  {% if not selected_charge %}
+    <p>Не найдено ни одного начисления (PaymentCharge). Сначала создайте начисление в админке.</p>
+  {% else %}
+    <div style="margin: 10px 0 16px 0;">
+      <strong>Начисление:</strong>
+      #{{ selected_charge.id }} · {{ selected_charge.service_name }} · {{ selected_charge.amount }} {{ selected_charge.currency }}
+      {% if selected_charge.payment_url %}
+        · <a href="{{ selected_charge.payment_url }}" target="_blank" rel="noreferrer noopener">ссылка на оплату</a>
+      {% endif %}
+      {% if selected_charge.due_date %}· срок: {{ selected_charge.due_date }}{% endif %}
+      <br />
+      <strong>Итого:</strong>
+      строк: {{ totals.rows }},
+      принято: {{ totals.accepted_count }},
+      оплачено: {{ totals.paid_count }},
+      на рассмотрении: {{ totals.pending_count }},
+      к оплате: {{ totals.due_count }}
+    </div>
+
+    <div class="module" style="overflow:auto;">
+      <table id="result_list" class="admin-report-table" style="min-width: 900px;">
+        <thead>
+          <tr>
+            <th>Дата/время</th>
+            <th>Квартира</th>
+            <th>Подъезд</th>
+            <th>Статус</th>
+            <th>Сумма</th>
+            <th>Чек</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in rows %}
+            <tr>
+              <td>{{ p.status_updated_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ p.apartment }}</td>
+              <td>{{ p.entrance }}</td>
+              <td>{{ p.get_status_display }}</td>
+              <td>{{ p.payment.amount }} {{ p.payment.currency }}</td>
+              <td>
+                {% with receipt=p.receipts.all|first %}
+                  {% if receipt %}
+                    <a href="{{ receipt.file.url }}" target="_blank" rel="noreferrer noopener">Открыть</a>
+                    <span style="color:#666;">({{ receipt.uploaded_at|date:"Y-m-d H:i" }})</span>
+                  {% else %}
+                    —
+                  {% endif %}
+                {% endwith %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" style="padding: 12px;">Нет оплат в выбранном диапазоне.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 10px; color: #666;">
+      Примечание: показываются максимум 2000 строк (по убыванию времени обновления статуса).
+    </p>
+  {% endif %}
+{% endblock %}
