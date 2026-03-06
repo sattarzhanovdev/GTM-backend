@@ -7,6 +7,7 @@ from django.db.models import Prefetch, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.text import slugify
 
 from .models import PaymentCharge, PaymentParticipation, Receipt
 
@@ -42,6 +43,10 @@ def apartment_search_payments_report(request: HttpRequest) -> HttpResponse:
     from_str = (request.GET.get("from") or "").strip()
     to_str = (request.GET.get("to") or "").strip()
     status_values = [s for s in request.GET.getlist("status") if s]
+    apartment_str = (request.GET.get("apartment") or "").strip()
+    entrance_str = (request.GET.get("entrance") or "").strip()
+    has_receipt = (request.GET.get("has_receipt") or "").strip().lower() in ("1", "true", "yes", "on")
+    fmt = (request.GET.get("format") or "").strip().lower()
 
     tz = timezone.get_current_timezone()
     now = timezone.localtime(timezone.now(), tz)
@@ -62,13 +67,17 @@ def apartment_search_payments_report(request: HttpRequest) -> HttpResponse:
             or charges_qs.first()
         )
 
-    participations = []
+    participations: list[PaymentParticipation] = []
     totals = {
         "rows": 0,
         "accepted_count": 0,
         "paid_count": 0,
         "pending_count": 0,
         "due_count": 0,
+        "accepted_sum": 0,
+        "paid_sum": 0,
+        "pending_sum": 0,
+        "due_sum": 0,
     }
 
     if selected_charge is not None:
@@ -81,18 +90,68 @@ def apartment_search_payments_report(request: HttpRequest) -> HttpResponse:
         parts_qs = parts_qs.filter(status_updated_at__gte=dt_from, status_updated_at__lte=dt_to)
         if status_values:
             parts_qs = parts_qs.filter(status__in=status_values)
+        if apartment_str.isdigit():
+            parts_qs = parts_qs.filter(apartment=int(apartment_str))
+        if entrance_str.isdigit():
+            parts_qs = parts_qs.filter(entrance=int(entrance_str))
+        if has_receipt:
+            parts_qs = parts_qs.filter(receipts__isnull=False).distinct()
 
         participations = list(parts_qs[:2000])
         totals["rows"] = len(participations)
+        amount = int(getattr(selected_charge, "amount", 0) or 0)
         for p in participations:
             if p.status == PaymentParticipation.Status.ACCEPTED:
                 totals["accepted_count"] += 1
+                totals["accepted_sum"] += amount
             elif p.status == PaymentParticipation.Status.PAID:
                 totals["paid_count"] += 1
+                totals["paid_sum"] += amount
             elif p.status == PaymentParticipation.Status.PENDING:
                 totals["pending_count"] += 1
+                totals["pending_sum"] += amount
             elif p.status == PaymentParticipation.Status.DUE:
                 totals["due_count"] += 1
+                totals["due_sum"] += amount
+
+    if fmt == "csv":
+        import csv
+        from io import StringIO
+
+        out = StringIO()
+        w = csv.writer(out)
+        w.writerow(["Дата/время", "Квартира", "Подъезд", "Статус", "Сумма", "Валюта", "Чек (url)", "Чек загружен"])
+        for p in participations:
+            receipt = next(iter(getattr(p, "receipts", []).all()), None)  # prefetched, no extra queries
+            receipt_url = ""
+            receipt_uploaded = ""
+            if receipt:
+                try:
+                    receipt_url = receipt.file.url
+                except Exception:
+                    receipt_url = ""
+                receipt_uploaded = timezone.localtime(receipt.uploaded_at, tz).strftime("%Y-%m-%d %H:%M") if receipt.uploaded_at else ""
+
+            dt = timezone.localtime(p.status_updated_at, tz).strftime("%Y-%m-%d %H:%M") if p.status_updated_at else ""
+            w.writerow(
+                [
+                    dt,
+                    p.apartment,
+                    p.entrance,
+                    p.get_status_display(),
+                    p.payment.amount,
+                    p.payment.currency,
+                    receipt_url,
+                    receipt_uploaded,
+                ]
+            )
+
+        filename = "report"
+        if selected_charge:
+            filename = f"payments-{selected_charge.id}-{slugify(selected_charge.service_name)[:40] or 'charge'}"
+        resp = HttpResponse(out.getvalue(), content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
+        return resp
 
     def _dt_local_input(dt: datetime) -> str:
         try:
@@ -112,8 +171,10 @@ def apartment_search_payments_report(request: HttpRequest) -> HttpResponse:
             "dt_to_value": _dt_local_input(dt_to),
             "status_choices": PaymentParticipation.Status.choices,
             "selected_statuses": set(status_values),
+            "apartment_value": apartment_str,
+            "entrance_value": entrance_str,
+            "has_receipt": has_receipt,
             "rows": participations,
             "totals": totals,
         },
     )
-

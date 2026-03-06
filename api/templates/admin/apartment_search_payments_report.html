@@ -3,113 +3,263 @@
 
 {% block title %}Отчет: оплаты поиска квартиры{% endblock %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .crm-wrap { max-width: 1400px; }
+    .crm-subtle { color: var(--body-quiet-color, #666); }
+    .crm-header { display:flex; gap:12px; align-items:baseline; justify-content:space-between; flex-wrap:wrap; margin-bottom: 14px; }
+    .crm-title { margin: 0; }
+    .crm-actions { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+    .crm-pill { display:inline-flex; align-items:center; gap:8px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--hairline-color, #ddd); background: var(--body-bg, #fff); }
+
+    .crm-grid { display:grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .crm-grid { grid-template-columns: 1fr; } }
+
+    .crm-card { background: var(--body-bg, #fff); border: 1px solid var(--hairline-color, #ddd); border-radius: 12px; box-shadow: 0 1px 0 rgba(0,0,0,.03); }
+    .crm-card-h { padding: 14px 14px 10px 14px; border-bottom: 1px solid var(--hairline-color, #eee); display:flex; align-items:center; justify-content:space-between; gap: 10px; }
+    .crm-card-b { padding: 14px; }
+    .crm-kpis { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 1100px) { .crm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { .crm-kpis { grid-template-columns: 1fr; } }
+    .crm-kpi { padding: 12px; border-radius: 12px; border: 1px solid var(--hairline-color, #eee); background: color-mix(in oklab, var(--body-bg, #fff) 92%, var(--primary, #0b57d0) 8%); }
+    .crm-kpi .k { font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: var(--body-quiet-color, #666); }
+    .crm-kpi .v { font-size: 20px; font-weight: 700; margin-top: 6px; }
+    .crm-kpi .s { font-size: 12px; margin-top: 2px; color: var(--body-quiet-color, #666); }
+
+    .crm-form .row { display:grid; grid-template-columns: 1fr; gap: 10px; }
+    .crm-form label { display:block; font-weight: 650; margin-bottom: 6px; }
+    .crm-form input[type="text"],
+    .crm-form input[type="number"],
+    .crm-form input[type="datetime-local"],
+    .crm-form select { width: 100%; box-sizing: border-box; }
+    .crm-form .hint { font-size: 12px; color: var(--body-quiet-color, #666); margin-top: 4px; }
+    .crm-form .statuses { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .crm-form .statuses label { font-weight: 400; margin: 0; display:flex; gap: 8px; align-items:center; }
+    .crm-form .buttons { display:flex; gap: 8px; flex-wrap: wrap; }
+    .crm-form .quick { display:flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .crm-form .quick a { text-decoration: none; }
+
+    .crm-table-wrap { overflow:auto; border-radius: 12px; }
+    .crm-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; }
+    .crm-table thead th { position: sticky; top: 0; z-index: 2; background: var(--header-bg, #f6f7f8); border-bottom: 1px solid var(--hairline-color, #ddd); padding: 10px 10px; text-align:left; font-weight: 650; white-space: nowrap; }
+    .crm-table tbody td { padding: 10px 10px; border-bottom: 1px solid var(--hairline-color, #eee); vertical-align: top; }
+    .crm-table tbody tr:nth-child(2n) td { background: color-mix(in oklab, var(--body-bg, #fff) 96%, #000 4%); }
+    .crm-table tbody tr:hover td { background: color-mix(in oklab, var(--body-bg, #fff) 90%, var(--primary, #0b57d0) 10%); }
+
+    .badge { display:inline-flex; align-items:center; padding: 4px 10px; border-radius: 999px; font-weight: 650; font-size: 12px; border: 1px solid transparent; white-space: nowrap; }
+    .badge--accepted { background: color-mix(in oklab, #16a34a 16%, var(--body-bg, #fff)); border-color: color-mix(in oklab, #16a34a 28%, var(--hairline-color, #ddd)); color: #0f5d2a; }
+    .badge--paid { background: color-mix(in oklab, #0ea5e9 16%, var(--body-bg, #fff)); border-color: color-mix(in oklab, #0ea5e9 28%, var(--hairline-color, #ddd)); color: #075985; }
+    .badge--pending { background: color-mix(in oklab, #f59e0b 18%, var(--body-bg, #fff)); border-color: color-mix(in oklab, #f59e0b 30%, var(--hairline-color, #ddd)); color: #7c4a00; }
+    .badge--due { background: color-mix(in oklab, #ef4444 14%, var(--body-bg, #fff)); border-color: color-mix(in oklab, #ef4444 28%, var(--hairline-color, #ddd)); color: #7f1d1d; }
+    .badge--other { background: color-mix(in oklab, #64748b 14%, var(--body-bg, #fff)); border-color: color-mix(in oklab, #64748b 26%, var(--hairline-color, #ddd)); color: #334155; }
+
+    .crm-empty { padding: 18px; text-align:center; }
+    .crm-empty h2 { margin: 0 0 6px 0; }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <h1>Отчет: оплаты поиска квартиры</h1>
-
-  <form method="get" style="margin: 16px 0; padding: 12px; border: 1px solid var(--hairline-color, #ddd); border-radius: 8px;">
-    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end;">
+  <div class="crm-wrap">
+    <div class="crm-header">
       <div>
-        <label for="charge_id" style="display:block; font-weight: 600;">Начисление</label>
-        <select id="charge_id" name="charge_id">
-          <option value="">— выбрать —</option>
-          {% for c in charges %}
-            <option value="{{ c.id }}" {% if selected_charge and c.id == selected_charge.id %}selected{% endif %}>
-              #{{ c.id }} · {{ c.service_name }} · {{ c.amount }} {{ c.currency }}{% if c.due_date %} · до {{ c.due_date }}{% endif %}
-            </option>
-          {% endfor %}
-        </select>
+        <h1 class="crm-title">Отчет: оплаты поиска квартиры</h1>
+        <div class="crm-subtle">Фильтры по дате/времени, квартире и статусу. Экспорт в CSV.</div>
       </div>
-
-      <div>
-        <label for="from" style="display:block; font-weight: 600;">С</label>
-        <input id="from" name="from" type="datetime-local" value="{{ dt_from_value }}" />
+      <div class="crm-actions">
+        {% if selected_charge %}
+          <span class="crm-pill">
+            <strong>#{{ selected_charge.id }}</strong>
+            <span class="crm-subtle">{{ selected_charge.service_name }}</span>
+            <span><strong>{{ selected_charge.amount }}</strong> {{ selected_charge.currency }}</span>
+          </span>
+        {% endif %}
       </div>
+    </div>
 
-      <div>
-        <label for="to" style="display:block; font-weight: 600;">По</label>
-        <input id="to" name="to" type="datetime-local" value="{{ dt_to_value }}" />
-      </div>
+    <div class="crm-grid">
+      <div class="crm-card">
+        <div class="crm-card-h">
+          <strong>Фильтры</strong>
+          <span class="crm-subtle">по умолчанию: 30 дней</span>
+        </div>
+        <div class="crm-card-b">
+          <form method="get" class="crm-form">
+            <div class="row">
+              <div>
+                <label for="charge_id">Начисление</label>
+                <select id="charge_id" name="charge_id">
+                  <option value="">— выбрать —</option>
+                  {% for c in charges %}
+                    <option value="{{ c.id }}" {% if selected_charge and c.id == selected_charge.id %}selected{% endif %}>
+                      #{{ c.id }} · {{ c.service_name }} · {{ c.amount }} {{ c.currency }}{% if c.due_date %} · до {{ c.due_date }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+                <div class="hint">Совет: назовите начисление “Поиск квартиры”, чтобы оно выбиралось автоматически.</div>
+              </div>
 
-      <div>
-        <div style="font-weight: 600; margin-bottom: 6px;">Статусы</div>
-        <div style="display:flex; flex-wrap: wrap; gap: 10px;">
-          {% for value,label in status_choices %}
-            <label style="display:flex; gap:6px; align-items:center;">
-              <input type="checkbox" name="status" value="{{ value }}" {% if value in selected_statuses %}checked{% endif %} />
-              <span>{{ label }}</span>
-            </label>
-          {% endfor %}
+              <div>
+                <label for="from">С</label>
+                <input id="from" name="from" type="datetime-local" value="{{ dt_from_value }}" />
+              </div>
+
+              <div>
+                <label for="to">По</label>
+                <input id="to" name="to" type="datetime-local" value="{{ dt_to_value }}" />
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <label for="apartment">Квартира</label>
+                  <input id="apartment" name="apartment" type="number" inputmode="numeric" value="{{ apartment_value }}" placeholder="например 12" />
+                </div>
+                <div>
+                  <label for="entrance">Подъезд</label>
+                  <input id="entrance" name="entrance" type="number" inputmode="numeric" value="{{ entrance_value }}" placeholder="например 1" />
+                </div>
+              </div>
+
+              <div>
+                <label style="display:flex; gap: 8px; align-items:center; margin: 0;">
+                  <input type="checkbox" name="has_receipt" value="1" {% if has_receipt %}checked{% endif %} />
+                  <span><strong>Только с чеком</strong></span>
+                </label>
+              </div>
+
+              <div>
+                <label>Статусы</label>
+                <div class="statuses">
+                  {% for value,label in status_choices %}
+                    <label>
+                      <input type="checkbox" name="status" value="{{ value }}" {% if value in selected_statuses %}checked{% endif %} />
+                      <span>{{ label }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="buttons">
+                <button class="button default" type="submit">Показать</button>
+                <a class="button" href="?">Сбросить</a>
+                <button class="button" name="format" value="csv" type="submit">CSV</button>
+              </div>
+
+              <div class="quick">
+                <a class="button" href="?charge_id={% if selected_charge %}{{ selected_charge.id }}{% endif %}">30 дней</a>
+                <a class="button" href="?charge_id={% if selected_charge %}{{ selected_charge.id }}{% endif %}&from={{ dt_to_value|slice:":10" }}T00:00">сегодня</a>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
 
-      <div>
-        <button class="button" type="submit">Показать</button>
-        <a class="button" href="?" style="margin-left: 8px;">Сбросить</a>
-      </div>
-    </div>
-  </form>
-
   {% if not selected_charge %}
-    <p>Не найдено ни одного начисления (PaymentCharge). Сначала создайте начисление в админке.</p>
+      <div class="crm-card">
+        <div class="crm-empty">
+          <h2>Нет начислений</h2>
+          <div class="crm-subtle">Не найдено ни одного начисления (PaymentCharge). Сначала создайте начисление в админке.</div>
+        </div>
+      </div>
   {% else %}
-    <div style="margin: 10px 0 16px 0;">
-      <strong>Начисление:</strong>
-      #{{ selected_charge.id }} · {{ selected_charge.service_name }} · {{ selected_charge.amount }} {{ selected_charge.currency }}
-      {% if selected_charge.payment_url %}
-        · <a href="{{ selected_charge.payment_url }}" target="_blank" rel="noreferrer noopener">ссылка на оплату</a>
-      {% endif %}
-      {% if selected_charge.due_date %}· срок: {{ selected_charge.due_date }}{% endif %}
-      <br />
-      <strong>Итого:</strong>
-      строк: {{ totals.rows }},
-      принято: {{ totals.accepted_count }},
-      оплачено: {{ totals.paid_count }},
-      на рассмотрении: {{ totals.pending_count }},
-      к оплате: {{ totals.due_count }}
-    </div>
+      <div class="crm-card">
+        <div class="crm-card-h">
+          <strong>Сводка</strong>
+          <div class="crm-actions">
+            {% if selected_charge.payment_url %}
+              <a class="button" href="{{ selected_charge.payment_url }}" target="_blank" rel="noreferrer noopener">Ссылка на оплату</a>
+            {% endif %}
+            {% if selected_charge.due_date %}
+              <span class="crm-subtle">Срок: {{ selected_charge.due_date }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="crm-card-b">
+          <div class="crm-kpis">
+            <div class="crm-kpi">
+              <div class="k">Строк</div>
+              <div class="v">{{ totals.rows }}</div>
+              <div class="s">в выбранном диапазоне</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">Принято</div>
+              <div class="v">{{ totals.accepted_count }}</div>
+              <div class="s">{{ totals.accepted_sum }} {{ selected_charge.currency }}</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">Оплачено</div>
+              <div class="v">{{ totals.paid_count }}</div>
+              <div class="s">{{ totals.paid_sum }} {{ selected_charge.currency }}</div>
+            </div>
+            <div class="crm-kpi">
+              <div class="k">На рассмотрении</div>
+              <div class="v">{{ totals.pending_count }}</div>
+              <div class="s">{{ totals.pending_sum }} {{ selected_charge.currency }}</div>
+            </div>
+          </div>
+        </div>
 
-    <div class="module" style="overflow:auto;">
-      <table id="result_list" class="admin-report-table" style="min-width: 900px;">
-        <thead>
-          <tr>
-            <th>Дата/время</th>
-            <th>Квартира</th>
-            <th>Подъезд</th>
-            <th>Статус</th>
-            <th>Сумма</th>
-            <th>Чек</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in rows %}
-            <tr>
-              <td>{{ p.status_updated_at|date:"Y-m-d H:i" }}</td>
-              <td>{{ p.apartment }}</td>
-              <td>{{ p.entrance }}</td>
-              <td>{{ p.get_status_display }}</td>
-              <td>{{ p.payment.amount }} {{ p.payment.currency }}</td>
-              <td>
-                {% with receipt=p.receipts.all|first %}
-                  {% if receipt %}
-                    <a href="{{ receipt.file.url }}" target="_blank" rel="noreferrer noopener">Открыть</a>
-                    <span style="color:#666;">({{ receipt.uploaded_at|date:"Y-m-d H:i" }})</span>
-                  {% else %}
-                    —
-                  {% endif %}
-                {% endwith %}
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="6" style="padding: 12px;">Нет оплат в выбранном диапазоне.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <p style="margin-top: 10px; color: #666;">
-      Примечание: показываются максимум 2000 строк (по убыванию времени обновления статуса).
-    </p>
+        <div class="crm-card-h">
+          <strong>Оплаты</strong>
+          <span class="crm-subtle">лимит: 2000 строк</span>
+        </div>
+        <div class="crm-table-wrap">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>Дата/время</th>
+                <th>Квартира</th>
+                <th>Подъезд</th>
+                <th>Статус</th>
+                <th>Сумма</th>
+                <th>Чек</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in rows %}
+                <tr>
+                  <td>{{ p.status_updated_at|date:"Y-m-d H:i" }}</td>
+                  <td><strong>{{ p.apartment }}</strong></td>
+                  <td>{{ p.entrance }}</td>
+                  <td>
+                    {% if p.status == "accepted" %}
+                      <span class="badge badge--accepted">{{ p.get_status_display }}</span>
+                    {% elif p.status == "paid" %}
+                      <span class="badge badge--paid">{{ p.get_status_display }}</span>
+                    {% elif p.status == "pending" %}
+                      <span class="badge badge--pending">{{ p.get_status_display }}</span>
+                    {% elif p.status == "due" %}
+                      <span class="badge badge--due">{{ p.get_status_display }}</span>
+                    {% else %}
+                      <span class="badge badge--other">{{ p.get_status_display }}</span>
+                    {% endif %}
+                  </td>
+                  <td><strong>{{ p.payment.amount }}</strong> {{ p.payment.currency }}</td>
+                  <td>
+                    {% with receipt=p.receipts.all|first %}
+                      {% if receipt %}
+                        <a class="button" style="padding: 4px 10px;" href="{{ receipt.file.url }}" target="_blank" rel="noreferrer noopener">Открыть</a>
+                        <span class="crm-subtle">· {{ receipt.uploaded_at|date:"Y-m-d H:i" }}</span>
+                      {% else %}
+                        <span class="crm-subtle">—</span>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6">
+                    <div class="crm-empty">
+                      <h2>Ничего не найдено</h2>
+                      <div class="crm-subtle">Попробуйте изменить диапазон времени или снять фильтры.</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
   {% endif %}
+  </div>
 {% endblock %}
