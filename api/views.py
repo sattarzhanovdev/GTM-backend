@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from django.db.models import Q
 
-from .auth import USERNAME_RE, issue_token, json_error, parse_json_body, require_auth
+from .auth import issue_token, json_error, parse_json_body, parse_username, require_auth
 from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 
 
@@ -70,12 +70,15 @@ def login(request):
     if not username or not password:
         return json_error("Нужны поля username и password", status=400)
 
-    match = USERNAME_RE.match(username)
-    if not match:
-        return json_error("username должен быть в формате 'квартира-подъезд' (например 12-1)", status=400)
+    parsed = parse_username(username)
+    if not parsed:
+        return json_error(
+            "Неверный формат username. Примеры: '12-1' (старый) или 'nasip204220' / 'nasip-20-4-220' (новый).",
+            status=400,
+        )
 
-    apartment = match.group("apartment")
-    entrance = match.group("entrance")
+    apartment = str(parsed["apartment"])
+    entrance = str(parsed["entrance"])
 
     # бизнес-правило по умолчанию: пароль = номер квартиры.
     # Но если пользователь создан/изменён через админку, разрешаем вход по реальному паролю Django.
@@ -99,11 +102,15 @@ def login(request):
     profile, _ = Profile.objects.get_or_create(
         user=user,
         defaults={
-            "apartment": int(apartment),
-            "entrance": int(entrance),
+            "apartment": int(parsed["apartment"]),
+            "entrance": int(parsed["entrance"]),
             "created_at": timezone.now(),
         },
     )
+    if profile.apartment != int(parsed["apartment"]) or profile.entrance != int(parsed["entrance"]):
+        profile.apartment = int(parsed["apartment"])
+        profile.entrance = int(parsed["entrance"])
+        profile.save(update_fields=["apartment", "entrance", "updated_at"])
 
     # Ensure at least one "apartment member" exists for the UI.
     ApartmentMember.objects.get_or_create(
