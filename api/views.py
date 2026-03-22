@@ -80,24 +80,15 @@ def login(request):
     apartment = str(parsed["apartment"])
     entrance = str(parsed["entrance"])
 
-    # бизнес-правило по умолчанию: пароль = номер квартиры.
-    # Но если пользователь создан/изменён через админку, разрешаем вход по реальному паролю Django.
     try:
         user = User.objects.get(username=username)
-        created = False
     except User.DoesNotExist:
-        user = None
-        created = True
+        return json_error("Пользователь не найден", status=401)
 
-    if created:
-        # Для новых пользователей сохраняем старое правило: пароль должен быть равен номеру квартиры.
-        if password != apartment:
-            return json_error("Неверный логин или пароль", status=401)
-        user = User.objects.create_user(username=username, password=password)
-    else:
-        assert user is not None
-        if password != apartment and not user.check_password(password):
-            return json_error("Неверный логин или пароль", status=401)
+    # Пароль для квартиры: по умолчанию задаём как номер квартиры при создании пользователей.
+    # Дополнительно не "авторегистрируем" — вход только для существующих.
+    if not user.check_password(password):
+        return json_error("Неверный логин или пароль", status=401)
 
     profile, _ = Profile.objects.get_or_create(
         user=user,
@@ -136,6 +127,7 @@ def login(request):
                 "isPayed": profile.is_payed,
                 "isAccept": profile.is_accept,
                 "block": "18" if profile.is_blocked else "0",
+                "hasParkingAccess": bool(profile.has_parking_access),
             },
         }
     )
@@ -155,6 +147,7 @@ def me(request):
                 "isPayed": profile.is_payed,
                 "isAccept": profile.is_accept,
                 "block": "18" if profile.is_blocked else "0",
+                "hasParkingAccess": bool(profile.has_parking_access),
             },
         }
     )
@@ -404,9 +397,14 @@ def _pulse(key: str, seconds: int = 1):
 @require_GET
 @require_auth
 def devices_status(request):
-    keys = ["gate"] + [f"kalitka{i}" for i in range(1, 5)] + [f"entrance{i}" for i in range(1, 6)] + [
-        f"lift{i}" for i in range(1, 6)
-    ]
+    keys = (
+        ["gate"]  # legacy alias for gate1
+        + [f"gate{i}" for i in range(1, 6)]
+        + [f"kalitka{i}" for i in range(1, 7)]
+        + [f"entrance{i}" for i in range(1, 6)]
+        + [f"lift{i}" for i in range(1, 6)]
+        + ["parking"]
+    )
     pulses = {p.key: p for p in DevicePulse.objects.filter(key__in=keys)}
     return JsonResponse(
         {
@@ -421,6 +419,19 @@ def devices_status(request):
 @require_auth
 def devices_gate_open(request):
     _pulse("gate", seconds=1)
+    _pulse("gate1", seconds=1)
+    return JsonResponse({"ok": True})
+
+
+@csrf_exempt
+@require_POST
+@require_auth
+def devices_gate_n_open(request, n: int):
+    if n not in (1, 2, 3, 4, 5):
+        return json_error("Неверный номер ворот", status=400)
+    _pulse(f"gate{n}", seconds=1)
+    if n == 1:
+        _pulse("gate", seconds=1)
     return JsonResponse({"ok": True})
 
 
@@ -428,7 +439,7 @@ def devices_gate_open(request):
 @require_POST
 @require_auth
 def devices_kalitka_open(request, n: int):
-    if n not in (1, 2, 3, 4):
+    if n not in (1, 2, 3, 4, 5, 6):
         return json_error("Неверный номер калитки", status=400)
     _pulse(f"kalitka{n}", seconds=1)
     return JsonResponse({"ok": True})
@@ -451,6 +462,17 @@ def devices_lift_open(request, n: int):
     if n not in (1, 2, 3, 4, 5):
         return json_error("Неверный номер подъезда", status=400)
     _pulse(f"lift{n}", seconds=1)
+    return JsonResponse({"ok": True})
+
+
+@csrf_exempt
+@require_POST
+@require_auth
+def devices_parking_open(request):
+    profile: Profile = request.profile
+    if not profile.has_parking_access:
+        return json_error("Нет доступа к парковке", status=403)
+    _pulse("parking", seconds=1)
     return JsonResponse({"ok": True})
 
 # Create your views here.

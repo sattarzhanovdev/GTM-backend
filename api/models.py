@@ -21,6 +21,7 @@ class Profile(models.Model):
     is_payed = models.BooleanField("Оплачено", default=True)
     is_accept = models.BooleanField("Подтверждён", default=True)
     is_blocked = models.BooleanField("Заблокирован", default=False)
+    has_parking_access = models.BooleanField("Доступ к парковке", default=False)
 
     created_at = models.DateTimeField("Создано", default=timezone.now, editable=False)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)

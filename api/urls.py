@@ -26,7 +26,9 @@ urlpatterns = [
     # Devices
     path("devices/status/", views.devices_status, name="devices_status"),
     path("devices/gate/open/", views.devices_gate_open, name="devices_gate_open"),
+    path("devices/gate/<int:n>/open/", views.devices_gate_n_open, name="devices_gate_n_open"),
     path("devices/kalitka/<int:n>/open/", views.devices_kalitka_open, name="devices_kalitka_open"),
     path("devices/entrance/<int:n>/open/", views.devices_entrance_open, name="devices_entrance_open"),
     path("devices/entrance/<int:n>/lift/open/", views.devices_lift_open, name="devices_lift_open"),
+    path("devices/parking/open/", views.devices_parking_open, name="devices_parking_open"),
 ]

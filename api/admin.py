@@ -20,8 +20,18 @@ from .push import send_push_for_notification
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "apartment", "entrance", "phone_number", "is_payed", "is_accept", "is_blocked", "updated_at")
-    list_filter = ("is_payed", "is_accept", "is_blocked", "entrance")
+    list_display = (
+        "user",
+        "apartment",
+        "entrance",
+        "phone_number",
+        "has_parking_access",
+        "is_payed",
+        "is_accept",
+        "is_blocked",
+        "updated_at",
+    )
+    list_filter = ("has_parking_access", "is_payed", "is_accept", "is_blocked", "entrance")
     search_fields = ("user__username", "full_name", "phone_number")
     readonly_fields = ("created_at", "updated_at")
 
