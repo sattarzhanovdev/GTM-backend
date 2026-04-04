@@ -60,56 +60,6 @@ class Migration(migrations.Migration):
             model_name='paymentparticipation',
             name='uniq_payment_apartment',
         ),
-        migrations.RenameIndex(
-            model_name='accountdeletionrequest',
-            new_name='api_account_status_432e3a_idx',
-            old_name='api_accountd_status_ee69c6_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='accountdeletionrequest',
-            new_name='api_account_created_ab502a_idx',
-            old_name='api_accountd_created_2ab7de_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='expense',
-            new_name='api_expense_occurre_048890_idx',
-            old_name='api_expense_occurre_1ce7c7_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='expense',
-            new_name='api_expense_created_0f1467_idx',
-            old_name='api_expense_created_79a719_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='expense',
-            new_name='api_expense_currenc_4186c3_idx',
-            old_name='api_expense_currency_6020c0_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='expensecategory',
-            new_name='api_expense_is_acti_ef217c_idx',
-            old_name='api_expensec_is_acti_3c2db0_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='expensecategory',
-            new_name='api_expense_sort_or_d35c4a_idx',
-            old_name='api_expensec_sort_o_820443_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='fundopeningbalance',
-            new_name='api_fundope_month_305e21_idx',
-            old_name='api_fundopen_month_72e5ef_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='fundopeningbalance',
-            new_name='api_fundope_currenc_ab5b26_idx',
-            old_name='api_fundopen_currency_a4ff67_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='pushdevice',
-            new_name='api_pushdev_token_t_8886d9_idx',
-            old_name='api_pushdev_token_t_d9f802_idx',
-        ),
         migrations.AddField(
             model_name='buildingentrancerange',
             name='building',
