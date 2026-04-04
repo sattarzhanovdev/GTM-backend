@@ -24,16 +24,29 @@ class Command(BaseCommand):
             cursor.execute("PRAGMA index_list('api_pushdevice');")
             existing = {row[1] for row in cursor.fetchall() if len(row) > 1}
 
-            wanted = {
-                "api_pushdev_token_t_d9f802_idx": "CREATE INDEX IF NOT EXISTS api_pushdev_token_t_d9f802_idx ON api_pushdevice (token_type);",
-            }
+            old_name = "api_pushdev_token_t_d9f802_idx"
+            new_name = "api_pushdev_token_t_8886d9_idx"
+            create_old = f"CREATE INDEX IF NOT EXISTS {old_name} ON api_pushdevice (token_type);"
+            drop_new = f"DROP INDEX IF EXISTS {new_name};"
 
-            for name, sql in wanted.items():
-                if name in existing:
-                    continue
-                cursor.execute(sql)
+            # Some codebases have a migration that renames old_name -> new_name.
+            # If the DB already contains new_name but not old_name, that migration fails
+            # because it tries to CREATE new_name first.
+            #
+            # To make migrations deterministic:
+            # - ensure old_name exists
+            # - ensure new_name does NOT exist (so rename can succeed)
+            if new_name in existing and old_name not in existing:
+                cursor.execute(drop_new)
                 fixed += 1
-                self.stdout.write(self.style.SUCCESS(f"Created index: {name}"))
+                self.stdout.write(self.style.SUCCESS(f"Dropped conflicting index: {new_name}"))
+                # Refresh the index list so next checks are accurate.
+                cursor.execute("PRAGMA index_list('api_pushdevice');")
+                existing = {row[1] for row in cursor.fetchall() if len(row) > 1}
+
+            if old_name not in existing:
+                cursor.execute(create_old)
+                fixed += 1
+                self.stdout.write(self.style.SUCCESS(f"Created index: {old_name}"))
 
         self.stdout.write(self.style.SUCCESS(f"Done. fixed={fixed}"))
-
