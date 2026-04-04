@@ -4,18 +4,20 @@ import json
 import re
 from datetime import timedelta
 from functools import wraps
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.utils import timezone
 
-from .models import Profile
+from .models import BuildingEntranceRange, ComplexBuilding, Profile, ResidentialComplex
 
 OLD_USERNAME_RE = re.compile(r"^(?P<apartment>\d+)-(?P<entrance>\d+)$")
 NEW_USERNAME_SPLIT_RE = re.compile(
-    r"^(?P<complex>[a-z]+)-(?P<building>[0-9]+|[a-z]+)-(?P<entrance>\d+)-(?P<apartment>\d+)$",
+    r"^(?P<complex>[a-z0-9]+)-(?P<building>[0-9]+|[a-z]+)-(?P<entrance>\d+)-(?P<apartment>\d+)$",
     re.IGNORECASE,
 )
 TOKEN_MAX_AGE = int(timedelta(days=30).total_seconds())
@@ -34,7 +36,7 @@ def parse_json_body(request):
 
 
 def _token_signer():
-    return TimestampSigner(salt="gtm-api-token")
+    return TimestampSigner(salt="DBN-api-token")
 
 
 def issue_token(username: str) -> str:
@@ -60,8 +62,59 @@ def auth_username_from_request(request) -> str | None:
 
 
 def _complexes_cfg() -> dict:
-    cfg = getattr(settings, "GTM_COMPLEXES", None)
-    return cfg if isinstance(cfg, dict) else {}
+    """
+    Возвращает конфиг комплексов/домов для парсинга username.
+
+    Приоритет:
+      1) данные из БД (ResidentialComplex/ComplexBuilding/BuildingEntranceRange)
+      2) fallback: settings.DBN_COMPLEXES (для обратной совместимости)
+
+    Формат совпадает с прежним settings.DBN_COMPLEXES.
+    """
+
+    # короткий кеш, чтобы parse_username не бил БД на каждый запрос
+    now_ts = int(timezone.now().timestamp())
+    cache = getattr(_complexes_cfg, "_cache", None)
+    if isinstance(cache, dict) and cache.get("ts") == now_ts:
+        return cache.get("data") or {}
+
+    db_cfg: dict[str, Any] = {}
+    try:
+        complexes = (
+            ResidentialComplex.objects.all()
+            .prefetch_related(
+                Prefetch(
+                    "buildings",
+                    queryset=ComplexBuilding.objects.all().prefetch_related(
+                        Prefetch(
+                            "entrance_ranges",
+                            queryset=BuildingEntranceRange.objects.all().order_by("entrance", "apartment_from"),
+                        )
+                    ),
+                )
+            )
+            .order_by("slug")
+        )
+        for c in complexes:
+            buildings: dict[str, Any] = {}
+            for b in c.buildings.all():
+                ranges = []
+                for r in b.entrance_ranges.all():
+                    ranges.append((int(r.entrance), int(r.apartment_from), int(r.apartment_to)))
+                buildings[str(b.building_id)] = {"entrance_ranges": ranges}
+            db_cfg[str(c.slug)] = {"title": str(c.title), "buildings": buildings}
+    except Exception:
+        db_cfg = {}
+
+    settings_cfg = getattr(settings, "DBN_COMPLEXES", None)
+    if isinstance(settings_cfg, dict):
+        merged = dict(settings_cfg)
+        merged.update(db_cfg)  # БД перекрывает settings
+    else:
+        merged = dict(db_cfg)
+
+    _complexes_cfg._cache = {"ts": now_ts, "data": merged}
+    return merged
 
 
 def _normalize_complex_slug(value: str) -> str:
@@ -74,6 +127,78 @@ def _normalize_building_id(value: str) -> str:
     if v.isdigit():
         v = str(int(v))
     return v
+
+
+def _settings_complex_cfg(complex_slug: str) -> dict | None:
+    cfg = getattr(settings, "DBN_COMPLEXES", None)
+    if not isinstance(cfg, dict):
+        return None
+    return cfg.get(_normalize_complex_slug(complex_slug)) if complex_slug else None
+
+
+def resolve_complex_building(parsed: dict) -> tuple[ResidentialComplex | None, ComplexBuilding | None]:
+    """
+    Привязывает parsed username к объектам БД. Если объектов нет — создаёт их
+    на основе settings.DBN_COMPLEXES (если возможно), либо создаёт "пустые"
+    сущности (без диапазонов).
+    """
+
+    complex_slug = _normalize_complex_slug(parsed.get("complex") or "")
+    building_id = _normalize_building_id(parsed.get("building") or "")
+
+    if not complex_slug:
+        # Старый формат: считаем что это "первый" комплекс.
+        first = ResidentialComplex.objects.order_by("slug").first()
+        if first:
+            complex_slug = str(first.slug)
+        else:
+            # fallback to settings
+            cfg = _complexes_cfg()
+            complex_slug = _normalize_complex_slug(next(iter(cfg.keys()), "default")) or "default"
+
+    complex_obj = ResidentialComplex.objects.filter(slug=complex_slug).first()
+    if complex_obj is None:
+        s_cfg = _settings_complex_cfg(complex_slug) or {}
+        title = str(s_cfg.get("title") or complex_slug.upper())
+        complex_obj = ResidentialComplex.objects.create(slug=complex_slug, title=title)
+
+    if not building_id:
+        # Если дом не задан (старый формат), берём первый дом или создаём "1".
+        b = ComplexBuilding.objects.filter(complex=complex_obj).order_by("building_id").first()
+        if b:
+            building_obj = b
+        else:
+            building_obj = ComplexBuilding.objects.create(complex=complex_obj, building_id="1", title="")
+        return complex_obj, building_obj
+
+    building_obj = ComplexBuilding.objects.filter(complex=complex_obj, building_id=building_id).first()
+    if building_obj is None:
+        building_obj = ComplexBuilding.objects.create(complex=complex_obj, building_id=building_id, title="")
+
+    # Если это дом из settings и диапазоны ещё не заполнены — зальём их.
+    if not BuildingEntranceRange.objects.filter(building=building_obj).exists():
+        s_cfg = _settings_complex_cfg(complex_slug) or {}
+        buildings = (s_cfg or {}).get("buildings") if isinstance(s_cfg, dict) else {}
+        b_cfg = (buildings or {}).get(building_id) if isinstance(buildings, dict) else None
+        ranges = (b_cfg or {}).get("entrance_ranges") or []
+        to_create = []
+        for ent, start, end in ranges:
+            try:
+                to_create.append(
+                    BuildingEntranceRange(
+                        building=building_obj,
+                        entrance=int(ent),
+                        apartment_from=int(start),
+                        apartment_to=int(end),
+                        created_at=timezone.now(),
+                    )
+                )
+            except Exception:
+                continue
+        if to_create:
+            BuildingEntranceRange.objects.bulk_create(to_create)
+
+    return complex_obj, building_obj
 
 
 def _entrance_for_apartment(complex_slug: str, building_id: str, apartment: int) -> int | None:
@@ -280,19 +405,29 @@ def require_auth(view_func):
         except User.DoesNotExist:
             return json_error("Unauthorized", status=401)
 
+        complex_obj, building_obj = resolve_complex_building(parsed)
         profile, _ = Profile.objects.get_or_create(
             user=user,
             defaults={
+                "complex": complex_obj,
+                "building": building_obj,
                 "apartment": int(parsed["apartment"]),
                 "entrance": int(parsed["entrance"]),
                 "created_at": timezone.now(),
             },
         )
         # На случай если username/правила изменились, синхронизируем значения.
-        if profile.apartment != int(parsed["apartment"]) or profile.entrance != int(parsed["entrance"]):
+        if (
+            profile.apartment != int(parsed["apartment"])
+            or profile.entrance != int(parsed["entrance"])
+            or profile.complex_id != (complex_obj.id if complex_obj else None)
+            or profile.building_id != (building_obj.id if building_obj else None)
+        ):
             profile.apartment = int(parsed["apartment"])
             profile.entrance = int(parsed["entrance"])
-            profile.save(update_fields=["apartment", "entrance", "updated_at"])
+            profile.complex = complex_obj
+            profile.building = building_obj
+            profile.save(update_fields=["apartment", "entrance", "complex", "building", "updated_at"])
 
         request.user = user
         request.profile = profile

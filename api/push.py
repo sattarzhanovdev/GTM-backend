@@ -30,6 +30,10 @@ def send_push_for_notification(notification: Notification) -> dict:
     Возвращает сводку по отправке.
     """
     q = PushDevice.objects.filter(is_active=True)
+    if notification.complex_id:
+        q = q.filter(building__complex_id=notification.complex_id)
+    if notification.building_id:
+        q = q.filter(building_id=notification.building_id)
     if notification.apartment is not None:
         q = q.filter(apartment=notification.apartment)
 
@@ -55,7 +59,12 @@ def send_push_for_notification(notification: Notification) -> dict:
                     token=t,
                     title=notification.title,
                     body=notification.body or "",
-                    data={"notificationId": notification.id, "apartment": notification.apartment or ""},
+                    data={
+                        "notificationId": notification.id,
+                        "apartment": notification.apartment or "",
+                        "complex": getattr(notification.complex, "slug", "") if notification.complex_id else "",
+                        "building": getattr(notification.building, "building_id", "") if notification.building_id else "",
+                    },
                 )
                 sent += 1
             except Exception as e:

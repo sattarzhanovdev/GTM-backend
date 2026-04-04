@@ -3,14 +3,16 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from django.db.models import Q
 
-from .auth import issue_token, json_error, parse_json_body, parse_username, require_auth
+from .auth import issue_token, json_error, parse_json_body, parse_username, require_auth, resolve_complex_building
 from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 
 
@@ -90,21 +92,32 @@ def login(request):
     if not user.check_password(password):
         return json_error("Неверный логин или пароль", status=401)
 
+    complex_obj, building_obj = resolve_complex_building(parsed)
     profile, _ = Profile.objects.get_or_create(
         user=user,
         defaults={
+            "complex": complex_obj,
+            "building": building_obj,
             "apartment": int(parsed["apartment"]),
             "entrance": int(parsed["entrance"]),
             "created_at": timezone.now(),
         },
     )
-    if profile.apartment != int(parsed["apartment"]) or profile.entrance != int(parsed["entrance"]):
+    if (
+        profile.apartment != int(parsed["apartment"])
+        or profile.entrance != int(parsed["entrance"])
+        or profile.complex_id != (complex_obj.id if complex_obj else None)
+        or profile.building_id != (building_obj.id if building_obj else None)
+    ):
         profile.apartment = int(parsed["apartment"])
         profile.entrance = int(parsed["entrance"])
-        profile.save(update_fields=["apartment", "entrance", "updated_at"])
+        profile.complex = complex_obj
+        profile.building = building_obj
+        profile.save(update_fields=["apartment", "entrance", "complex", "building", "updated_at"])
 
     # Ensure at least one "apartment member" exists for the UI.
     ApartmentMember.objects.get_or_create(
+        building=profile.building,
         apartment=profile.apartment,
         is_primary=True,
         defaults={
@@ -128,6 +141,7 @@ def login(request):
                 "isAccept": profile.is_accept,
                 "block": "18" if profile.is_blocked else "0",
                 "hasParkingAccess": bool(profile.has_parking_access),
+                "mustChangePassword": profile.password_changed_at is None,
             },
         }
     )
@@ -148,16 +162,68 @@ def me(request):
                 "isAccept": profile.is_accept,
                 "block": "18" if profile.is_blocked else "0",
                 "hasParkingAccess": bool(profile.has_parking_access),
+                "mustChangePassword": profile.password_changed_at is None,
             },
         }
     )
+
+
+@csrf_exempt
+@require_POST
+@require_auth
+def profile_password_change(request):
+    payload = parse_json_body(request)
+    if payload is None:
+        return json_error("Неверный JSON в теле запроса", status=400)
+
+    old_password = str(
+        payload.get("oldPassword")
+        or payload.get("old_password")
+        or payload.get("currentPassword")
+        or payload.get("current_password")
+        or ""
+    ).strip()
+    new_password = str(payload.get("newPassword") or payload.get("new_password") or "").strip()
+
+    if not old_password or not new_password:
+        return json_error("Нужны поля oldPassword и newPassword", status=400)
+    if new_password == old_password:
+        return json_error("Новый пароль не должен совпадать со старым", status=400)
+
+    user: User = request.user
+    if not user.check_password(old_password):
+        return json_error("Неверный текущий пароль", status=401)
+
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        msg = "; ".join([str(m) for m in (e.messages or [])]) or "Пароль не проходит проверку"
+        return json_error(msg, status=400)
+
+    user.set_password(new_password)
+    user.save(update_fields=["password"])
+
+    profile: Profile = request.profile
+    profile.password_changed_at = timezone.now()
+    profile.save(update_fields=["password_changed_at", "updated_at"])
+
+    return JsonResponse({"ok": True})
 
 
 @require_GET
 @require_auth
 def notifications(request):
     profile: Profile = request.profile
-    qs = Notification.objects.filter(Q(apartment=profile.apartment) | Q(apartment__isnull=True)).order_by("-created_at")
+    qs = (
+        Notification.objects.filter(complex=profile.complex)
+        .filter(
+            Q(apartment=profile.apartment, building=profile.building)
+            | Q(apartment=profile.apartment, building__isnull=True)
+            | Q(apartment__isnull=True, building=profile.building)
+            | Q(apartment__isnull=True, building__isnull=True)
+        )
+        .order_by("-created_at")
+    )
     items = [
         {
             "id": n.id,
@@ -177,7 +243,11 @@ def notifications(request):
 @require_auth
 def notifications_mark_read(request, notification_id: int):
     profile: Profile = request.profile
-    updated = Notification.objects.filter(id=notification_id, apartment=profile.apartment).update(is_read=True)
+    updated = (
+        Notification.objects.filter(id=notification_id, complex=profile.complex, apartment=profile.apartment)
+        .filter(Q(building=profile.building) | Q(building__isnull=True))
+        .update(is_read=True)
+    )
     if not updated:
         return json_error("Не найдено", status=404)
     return JsonResponse({"ok": True})
@@ -188,7 +258,11 @@ def notifications_mark_read(request, notification_id: int):
 @require_auth
 def notifications_delete(request, notification_id: int):
     profile: Profile = request.profile
-    deleted, _ = Notification.objects.filter(id=notification_id, apartment=profile.apartment).delete()
+    deleted, _ = (
+        Notification.objects.filter(id=notification_id, complex=profile.complex, apartment=profile.apartment)
+        .filter(Q(building=profile.building) | Q(building__isnull=True))
+        .delete()
+    )
     if not deleted:
         return json_error("Не найдено", status=404)
     return JsonResponse({"ok": True})
@@ -199,7 +273,7 @@ def notifications_delete(request, notification_id: int):
 def apartment_users(request):
     profile: Profile = request.profile
     items = (
-        ApartmentMember.objects.filter(apartment=profile.apartment)
+        ApartmentMember.objects.filter(building=profile.building, apartment=profile.apartment)
         .order_by("-is_primary", "-created_at")
         .values("id", "full_name", "phone_number", "code", "is_primary")
     )
@@ -211,7 +285,12 @@ def apartment_users(request):
 @require_auth
 def apartment_users_delete(request, member_id: int):
     profile: Profile = request.profile
-    deleted, _ = ApartmentMember.objects.filter(id=member_id, apartment=profile.apartment, is_primary=False).delete()
+    deleted, _ = ApartmentMember.objects.filter(
+        id=member_id,
+        building=profile.building,
+        apartment=profile.apartment,
+        is_primary=False,
+    ).delete()
     if not deleted:
         return json_error("Не найдено или нельзя удалить основного пользователя", status=404)
     return JsonResponse({"ok": True})
@@ -221,8 +300,12 @@ def apartment_users_delete(request, member_id: int):
 @require_auth
 def payments(request):
     profile: Profile = request.profile
-    qs = PaymentCharge.objects.all().order_by("-created_at")
-    parts = PaymentParticipation.objects.filter(apartment=profile.apartment, payment__in=qs).values(
+    qs = (
+        PaymentCharge.objects.filter(complex=profile.complex)
+        .filter(Q(building=profile.building) | Q(building__isnull=True))
+        .order_by("-created_at")
+    )
+    parts = PaymentParticipation.objects.filter(building=profile.building, apartment=profile.apartment, payment__in=qs).values(
         "payment_id", "status", "status_updated_at"
     )
     part_by_payment_id = {p["payment_id"]: p for p in parts}
@@ -252,7 +335,7 @@ def payments_history(request):
     profile: Profile = request.profile
     date_str = (request.GET.get("date") or "").strip()
     qs = (
-        PaymentParticipation.objects.filter(apartment=profile.apartment)
+        PaymentParticipation.objects.filter(building=profile.building, apartment=profile.apartment)
         .exclude(status=PaymentParticipation.Status.DUE)
         .select_related("payment")
         .order_by("-status_updated_at", "-created_at")
@@ -291,9 +374,14 @@ def payments_attach_receipt(request, payment_id: int):
         payment = PaymentCharge.objects.get(id=payment_id)
     except PaymentCharge.DoesNotExist:
         return json_error("Не найдено", status=404)
+    if payment.complex_id != profile.complex_id:
+        return json_error("Не найдено", status=404)
+    if payment.building_id and payment.building_id != profile.building_id:
+        return json_error("Не найдено", status=404)
 
     part, _ = PaymentParticipation.objects.get_or_create(
         payment=payment,
+        building=profile.building,
         apartment=profile.apartment,
         defaults={
             "entrance": profile.entrance,
@@ -363,6 +451,7 @@ def push_register(request):
         token=token,
         defaults={
             "token_type": token_type,
+            "building": profile.building,
             "apartment": profile.apartment,
             "entrance": profile.entrance,
             "platform": platform,

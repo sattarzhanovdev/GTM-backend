@@ -13,6 +13,7 @@ urlpatterns = [
     path("profile/notifications/<int:notification_id>/delete/", views.notifications_delete, name="notifications_delete"),
     path("profile/users/", views.apartment_users, name="apartment_users"),
     path("profile/users/<int:member_id>/delete/", views.apartment_users_delete, name="apartment_users_delete"),
+    path("profile/password/change/", views.profile_password_change, name="profile_password_change"),
     path("profile/delete-request/", views.account_delete_request, name="account_delete_request"),
 
     # Payments

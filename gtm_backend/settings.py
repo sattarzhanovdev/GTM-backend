@@ -32,7 +32,7 @@ HAS_JAZZMIN = False
 # Пример: nasip204220 = ЖК nasip, дом 20, подъезд 4, кв 220.
 #
 # Можно добавлять новые ЖК по аналогии.
-GTM_COMPLEXES = {
+DBN_COMPLEXES = {
     "nasip": {
         "title": "Эл Насип",
         "buildings": {
@@ -95,7 +95,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'gtm_backend.urls'
+ROOT_URLCONF = "gtm_backend.urls"
 
 TEMPLATES = [
     {
@@ -116,7 +116,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'gtm_backend.wsgi.application'
+WSGI_APPLICATION = "gtm_backend.wsgi.application"
 
 
 # Database
