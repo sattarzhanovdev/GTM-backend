@@ -16,6 +16,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL(
+            # На некоторых БД (особенно SQLite) индекс из старых миграций мог отсутствовать
+            # (например, был удалён вручную). Следующие миграции могут пытаться его удалить
+            # во время перестроения таблицы, поэтому гарантируем что он существует.
+            sql="CREATE INDEX IF NOT EXISTS api_pushdev_token_t_d9f802_idx ON api_pushdevice (token_type);",
+            reverse_sql="DROP INDEX IF EXISTS api_pushdev_token_t_d9f802_idx;",
+        ),
         migrations.CreateModel(
             name='BuildingEntranceRange',
             fields=[

@@ -256,7 +256,7 @@ class PushDevice(models.Model):
             models.Index(fields=["building", "apartment"]),
             models.Index(fields=["apartment"]),
             models.Index(fields=["is_active"]),
-            models.Index(fields=["token_type"]),
+            models.Index(fields=["token_type"], name="api_pushdev_token_t_d9f802_idx"),
         ]
 
     def __str__(self) -> str:
