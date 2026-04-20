@@ -78,6 +78,20 @@ Response: `{ token, user }`
 
 - `GET /api/devices/status/`
 - `POST /api/devices/gate/open/`
-- `POST /api/devices/kalitka/<n>/open/` (`n`: 1..4)
+- `POST /api/devices/gate/<n>/open/` (`n`: 1..5)
+- `POST /api/devices/kalitka/<n>/open/` (`n`: 1..6)
 - `POST /api/devices/entrance/<n>/open/` (`n`: 1..5)
 - `POST /api/devices/entrance/<n>/lift/open/` (`n`: 1..5)
+
+### MQTT config
+
+Если задан `MQTT_HOST`, backend будет публиковать команды устройств в MQTT вместо прямой работы через Firebase.
+
+- `MQTT_HOST` - адрес брокера
+- `MQTT_PORT` - порт, по умолчанию `1883`
+- `MQTT_USERNAME` / `MQTT_PASSWORD` - логин и пароль, если нужны
+- `MQTT_TLS` - `1/true`, если брокер требует TLS
+- `MQTT_TOPIC_PREFIX` - префикс топиков, по умолчанию `gtm`
+- `MQTT_TOPIC_TEMPLATE` - шаблон топика, по умолчанию `{prefix}/{complex}/{building}/{device_type}/{device_id}/set`
+
+В payload отправляется JSON с полями `action`, `seconds`, `complex`, `building`, `entrance`, `apartment`, `deviceType`, `deviceId`.

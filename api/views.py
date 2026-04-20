@@ -13,6 +13,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.db.models import Q
 
 from .auth import issue_token, json_error, parse_json_body, parse_username, require_auth, resolve_complex_building
+from .mqtt import publish_device_command
 from .models import AccountDeletionRequest, ApartmentMember, DevicePulse, Notification, PaymentCharge, PaymentParticipation, Profile, PushDevice, Receipt
 
 
@@ -483,6 +484,57 @@ def _pulse(key: str, seconds: int = 1):
     DevicePulse.objects.update_or_create(key=key, defaults={"active_until": until})
 
 
+def _publish_device_command(
+    profile: Profile,
+    *,
+    device_type: str,
+    device_id: str | int,
+    seconds: int = 1,
+    extra: dict | None = None,
+    target_complex: str | None = None,
+    target_building: str | None = None,
+):
+    try:
+        return publish_device_command(
+            profile,
+            device_type=device_type,
+            device_id=device_id,
+            seconds=seconds,
+            extra=extra,
+            target_complex=target_complex,
+            target_building=target_building,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"MQTT publish failed: {exc}") from exc
+
+
+def _resolve_global_device_scope(profile: Profile, device_type: str, device_id: int) -> tuple[str, str]:
+    complex_slug = str(profile.complex.slug)
+
+    if device_type == "gate":
+        building_id = {
+            1: "20",
+            2: "20",
+            3: "20",
+            4: "d",
+            5: "e",
+        }.get(device_id, str(profile.building.building_id))
+        return complex_slug, building_id
+
+    if device_type == "kalitka":
+        building_id = {
+            1: "20",
+            2: "20",
+            3: "20",
+            4: "d",
+            5: "e",
+            6: "e",
+        }.get(device_id, str(profile.building.building_id))
+        return complex_slug, building_id
+
+    return complex_slug, str(profile.building.building_id)
+
+
 @require_GET
 @require_auth
 def devices_status(request):
@@ -507,9 +559,21 @@ def devices_status(request):
 @require_POST
 @require_auth
 def devices_gate_open(request):
+    profile: Profile = request.profile
     _pulse("gate", seconds=1)
     _pulse("gate1", seconds=1)
-    return JsonResponse({"ok": True})
+    target_complex, target_building = _resolve_global_device_scope(profile, "gate", 1)
+    try:
+        mqtt = _publish_device_command(
+            profile,
+            device_type="gate",
+            device_id=1,
+            target_complex=target_complex,
+            target_building=target_building,
+        )
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 
 @csrf_exempt
@@ -518,10 +582,22 @@ def devices_gate_open(request):
 def devices_gate_n_open(request, n: int):
     if n not in (1, 2, 3, 4, 5):
         return json_error("Неверный номер ворот", status=400)
+    profile: Profile = request.profile
     _pulse(f"gate{n}", seconds=1)
     if n == 1:
         _pulse("gate", seconds=1)
-    return JsonResponse({"ok": True})
+    target_complex, target_building = _resolve_global_device_scope(profile, "gate", n)
+    try:
+        mqtt = _publish_device_command(
+            profile,
+            device_type="gate",
+            device_id=n,
+            target_complex=target_complex,
+            target_building=target_building,
+        )
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 
 @csrf_exempt
@@ -530,8 +606,20 @@ def devices_gate_n_open(request, n: int):
 def devices_kalitka_open(request, n: int):
     if n not in (1, 2, 3, 4, 5, 6):
         return json_error("Неверный номер калитки", status=400)
+    profile: Profile = request.profile
     _pulse(f"kalitka{n}", seconds=1)
-    return JsonResponse({"ok": True})
+    target_complex, target_building = _resolve_global_device_scope(profile, "kalitka", n)
+    try:
+        mqtt = _publish_device_command(
+            profile,
+            device_type="kalitka",
+            device_id=n,
+            target_complex=target_complex,
+            target_building=target_building,
+        )
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 
 @csrf_exempt
@@ -540,8 +628,13 @@ def devices_kalitka_open(request, n: int):
 def devices_entrance_open(request, n: int):
     if n not in (1, 2, 3, 4, 5):
         return json_error("Неверный номер подъезда", status=400)
+    profile: Profile = request.profile
     _pulse(f"entrance{n}", seconds=1)
-    return JsonResponse({"ok": True})
+    try:
+        mqtt = _publish_device_command(profile, device_type="entrance", device_id=n)
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 
 @csrf_exempt
@@ -550,8 +643,13 @@ def devices_entrance_open(request, n: int):
 def devices_lift_open(request, n: int):
     if n not in (1, 2, 3, 4, 5):
         return json_error("Неверный номер подъезда", status=400)
+    profile: Profile = request.profile
     _pulse(f"lift{n}", seconds=1)
-    return JsonResponse({"ok": True})
+    try:
+        mqtt = _publish_device_command(profile, device_type="lift", device_id=n)
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 
 @csrf_exempt
@@ -562,6 +660,10 @@ def devices_parking_open(request):
     if not profile.has_parking_access:
         return json_error("Нет доступа к парковке", status=403)
     _pulse("parking", seconds=1)
-    return JsonResponse({"ok": True})
+    try:
+        mqtt = _publish_device_command(profile, device_type="parking", device_id=1)
+    except RuntimeError as exc:
+        return json_error(str(exc), status=503)
+    return JsonResponse({"ok": True, "mqtt": mqtt})
 
 # Create your views here.
