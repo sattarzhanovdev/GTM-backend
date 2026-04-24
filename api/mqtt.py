@@ -33,6 +33,39 @@ def _as_bool(value: str | bool | None, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+DEVICE_RELAY_MAP: dict[tuple[str, str], tuple[str, str]] = {
+    ("gate", "1"): ("block1", "relay1"),
+    ("gate", "2"): ("block1", "relay2"),
+    ("gate", "3"): ("block1", "relay3"),
+    ("gate", "4"): ("block4", "relay1"),
+    ("gate", "5"): ("block4", "relay2"),
+    ("kalitka", "1"): ("block1", "relay4"),
+    ("kalitka", "2"): ("block1", "relay5"),
+    ("kalitka", "3"): ("block1", "relay6"),
+    ("kalitka", "4"): ("block1", "relay7"),
+    ("kalitka", "5"): ("block1", "relay8"),
+    ("kalitka", "6"): ("block2", "relay1"),
+    ("entrance", "1"): ("block2", "relay2"),
+    ("entrance", "2"): ("block2", "relay3"),
+    ("entrance", "3"): ("block2", "relay4"),
+    ("entrance", "4"): ("block2", "relay5"),
+    ("entrance", "5"): ("block2", "relay6"),
+    ("lift", "1"): ("block2", "relay7"),
+    ("lift", "2"): ("block2", "relay8"),
+    ("lift", "3"): ("block3", "relay1"),
+    ("lift", "4"): ("block3", "relay2"),
+    ("lift", "5"): ("block3", "relay3"),
+    ("parking", "1"): ("block3", "relay4"),
+}
+
+
+def resolve_relay_address(device_type: str, device_id: str | int) -> tuple[str, str]:
+    key = (str(device_type), str(device_id))
+    if key not in DEVICE_RELAY_MAP:
+        raise RuntimeError(f"MQTT relay mapping is missing for {device_type}:{device_id}")
+    return DEVICE_RELAY_MAP[key]
+
+
 def build_topic(profile: Profile, device_type: str, device_id: str | int) -> str:
     return build_topic_for_scope(
         complex_slug=profile.complex.slug,
@@ -53,22 +86,8 @@ def build_topic_for_scope(
     device_type: str,
     device_id: str | int,
 ) -> str:
-    prefix = _setting("MQTT_TOPIC_PREFIX", "gtm").strip().strip("/")
-    template = _setting(
-        "MQTT_TOPIC_TEMPLATE",
-        "{prefix}/{complex}/{building}/{device_type}/{device_id}/set",
-    )
-    topic = template.format(
-        prefix=prefix,
-        complex=complex_slug,
-        building=building_id,
-        entrance=entrance,
-        apartment=apartment,
-        device_type=device_type,
-        device_id=device_id,
-        scope=f"{complex_slug}/{building_id}",
-    )
-    return "/".join(part for part in str(topic).split("/") if part)
+    block_id, relay_id = resolve_relay_address(device_type, device_id)
+    return f"gate/{block_id}/{relay_id}/open"
 
 
 def publish_device_command(
@@ -85,6 +104,7 @@ def publish_device_command(
 ) -> dict[str, Any]:
     complex_slug = str(target_complex or profile.complex.slug)
     building_id = str(target_building or profile.building.building_id)
+    block_id, relay_id = resolve_relay_address(device_type, device_id)
     topic = build_topic_for_scope(
         complex_slug=complex_slug,
         building_id=building_id,
@@ -93,22 +113,25 @@ def publish_device_command(
         device_type=device_type,
         device_id=device_id,
     )
-    payload: dict[str, Any] = {
+    meta_payload: dict[str, Any] = {
         "action": action,
         "value": value,
         "seconds": seconds,
+        "duration": int(seconds) * 1000,
         "complex": complex_slug,
         "building": building_id,
         "entrance": profile.entrance,
         "apartment": profile.apartment,
+        "blockId": block_id,
+        "relayId": relay_id,
         "deviceType": device_type,
         "deviceId": str(device_id),
     }
     if extra:
-        payload.update(extra)
+        meta_payload.update(extra)
 
     if not mqtt_enabled():
-        return {"published": False, "topic": topic, "payload": payload}
+        raise RuntimeError("MQTT is not configured: set MQTT_HOST on the backend.")
 
     if mqtt_publish is None:
         raise RuntimeError("MQTT dependency is missing. Install paho-mqtt on the backend.")
@@ -125,7 +148,7 @@ def publish_device_command(
 
     mqtt_publish.single(
         topic,
-        payload=json.dumps(payload, ensure_ascii=False),
+        payload="1" if value and action == "open" else "0",
         hostname=_setting("MQTT_HOST"),
         port=int(_setting("MQTT_PORT", "1883")),
         client_id=_setting("MQTT_CLIENT_ID", ""),
@@ -136,4 +159,4 @@ def publish_device_command(
         retain=_as_bool(_setting("MQTT_RETAIN")),
     )
 
-    return {"published": True, "topic": topic, "payload": payload}
+    return {"published": True, "topic": topic, "payload": "1" if value and action == "open" else "0", "meta": meta_payload}

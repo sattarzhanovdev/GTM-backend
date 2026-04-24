@@ -85,13 +85,21 @@ Response: `{ token, user }`
 
 ### MQTT config
 
-Если задан `MQTT_HOST`, backend будет публиковать команды устройств в MQTT вместо прямой работы через Firebase.
+Если задан `MQTT_HOST`, backend будет публиковать команды устройств в MQTT.
 
 - `MQTT_HOST` - адрес брокера
 - `MQTT_PORT` - порт, по умолчанию `1883`
 - `MQTT_USERNAME` / `MQTT_PASSWORD` - логин и пароль, если нужны
 - `MQTT_TLS` - `1/true`, если брокер требует TLS
-- `MQTT_TOPIC_PREFIX` - префикс топиков, по умолчанию `gtm`
-- `MQTT_TOPIC_TEMPLATE` - шаблон топика, по умолчанию `{prefix}/{complex}/{building}/{device_type}/{device_id}/set`
+Топики публикуются в формате:
 
-В payload отправляется JSON с полями `action`, `seconds`, `complex`, `building`, `entrance`, `apartment`, `deviceType`, `deviceId`.
+- `gate/block1/relay1/open`
+- `gate/block2/relay4/open`
+
+Сейчас backend отправляет простой payload:
+
+```text
+1
+```
+
+Это сделано под ESP32-скетч, который принимает `1 / true / open`.
