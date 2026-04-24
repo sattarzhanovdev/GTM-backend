@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from typing import Any
 
 from django.conf import settings
@@ -31,6 +32,11 @@ def _as_bool(value: str | bool | None, default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _transport() -> str:
+    value = _setting("MQTT_TRANSPORT", "tcp").strip().lower()
+    return "websockets" if value in {"ws", "wss", "websocket", "websockets"} else "tcp"
 
 
 DEVICE_RELAY_MAP: dict[tuple[str, str], tuple[str, str]] = {
@@ -144,19 +150,26 @@ def publish_device_command(
 
     tls = None
     if _as_bool(_setting("MQTT_TLS")):
-        tls = {}
+        tls = {"tls_version": ssl.PROTOCOL_TLS_CLIENT}
+
+    proxy_args = None
+    ws_path = _setting("MQTT_WS_PATH")
+    if _transport() == "websockets" and ws_path:
+        proxy_args = {"path": ws_path}
 
     mqtt_publish.single(
         topic,
         payload="1" if value and action == "open" else "0",
         hostname=_setting("MQTT_HOST"),
-        port=int(_setting("MQTT_PORT", "1883")),
+        port=int(_setting("MQTT_PORT", "443" if _transport() == "websockets" else "1883")),
         client_id=_setting("MQTT_CLIENT_ID", ""),
         keepalive=int(_setting("MQTT_KEEPALIVE", "30")),
         auth=auth,
         tls=tls,
         qos=int(_setting("MQTT_QOS", "1")),
         retain=_as_bool(_setting("MQTT_RETAIN")),
+        transport=_transport(),
+        proxy_args=proxy_args,
     )
 
     return {"published": True, "topic": topic, "payload": "1" if value and action == "open" else "0", "meta": meta_payload}

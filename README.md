@@ -91,6 +91,8 @@ Response: `{ token, user }`
 - `MQTT_PORT` - порт, по умолчанию `1883`
 - `MQTT_USERNAME` / `MQTT_PASSWORD` - логин и пароль, если нужны
 - `MQTT_TLS` - `1/true`, если брокер требует TLS
+- `MQTT_TRANSPORT` - `tcp` или `websockets`
+- `MQTT_WS_PATH` - путь для WebSockets, например `/mqtt`
 Топики публикуются в формате:
 
 - `gate/block1/relay1/open`
@@ -103,3 +105,13 @@ Response: `{ token, user }`
 ```
 
 Это сделано под ESP32-скетч, который принимает `1 / true / open`.
+
+Если хостинг не выпускает соединения на `1883`, можно использовать MQTT через `443`:
+
+```env
+MQTT_HOST=<your-broker-host>
+MQTT_PORT=443
+MQTT_TLS=1
+MQTT_TRANSPORT=websockets
+MQTT_WS_PATH=/mqtt
+```
