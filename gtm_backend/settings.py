@@ -1,4 +1,4 @@
-
+import os
 import sys
 from pathlib import Path
 
@@ -179,3 +179,17 @@ MEDIA_ROOT = BASE_DIR / "media"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# MQTT
+# For quick testing this falls back to the public HiveMQ broker.
+# In production replace these with private broker values via environment variables.
+MQTT_HOST = os.environ.get("MQTT_HOST", "broker.hivemq.com")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "")
+MQTT_TLS = os.environ.get("MQTT_TLS", "0")
+MQTT_CLIENT_ID = os.environ.get("MQTT_CLIENT_ID", "")
+MQTT_KEEPALIVE = int(os.environ.get("MQTT_KEEPALIVE", "30"))
+MQTT_QOS = int(os.environ.get("MQTT_QOS", "1"))
+MQTT_RETAIN = os.environ.get("MQTT_RETAIN", "0")
