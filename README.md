@@ -115,3 +115,12 @@ MQTT_TLS=1
 MQTT_TRANSPORT=websockets
 MQTT_WS_PATH=/mqtt
 ```
+
+Если хостинг вообще не может публиковать MQTT наружу, оставьте Django на PythonAnywhere и используйте HTTP bridge:
+
+```env
+MQTT_BRIDGE_URL=http://YOUR_VPS_IP:8080/publish
+MQTT_BRIDGE_SECRET=change-me
+```
+
+Тогда backend будет слать обычный HTTP POST в bridge, а bridge уже опубликует MQTT.

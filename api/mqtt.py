@@ -6,6 +6,7 @@ import ssl
 from typing import Any
 
 from django.conf import settings
+import requests
 
 from .models import Profile
 
@@ -23,7 +24,7 @@ def _setting(name: str, default: str = "") -> str:
 
 
 def mqtt_enabled() -> bool:
-    return bool(_setting("MQTT_HOST"))
+    return bool(_setting("MQTT_BRIDGE_URL") or _setting("MQTT_HOST"))
 
 
 def _as_bool(value: str | bool | None, default: bool = False) -> bool:
@@ -37,6 +38,10 @@ def _as_bool(value: str | bool | None, default: bool = False) -> bool:
 def _transport() -> str:
     value = _setting("MQTT_TRANSPORT", "tcp").strip().lower()
     return "websockets" if value in {"ws", "wss", "websocket", "websockets"} else "tcp"
+
+
+def bridge_enabled() -> bool:
+    return bool(_setting("MQTT_BRIDGE_URL"))
 
 
 DEVICE_RELAY_MAP: dict[tuple[str, str], tuple[str, str]] = {
@@ -136,8 +141,37 @@ def publish_device_command(
     if extra:
         meta_payload.update(extra)
 
+    if bridge_enabled():
+        headers = {"Content-Type": "application/json"}
+        bridge_secret = _setting("MQTT_BRIDGE_SECRET")
+        if bridge_secret:
+            headers["X-Bridge-Secret"] = bridge_secret
+
+        try:
+            response = requests.post(
+                _setting("MQTT_BRIDGE_URL"),
+                headers=headers,
+                json={
+                    "topic": topic,
+                    "payload": "1" if value and action == "open" else "0",
+                    "meta": meta_payload,
+                },
+                timeout=float(_setting("MQTT_BRIDGE_TIMEOUT", "10")),
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            raise RuntimeError(f"MQTT bridge request failed: {exc}") from exc
+
+        return {
+            "published": True,
+            "via": "bridge",
+            "topic": topic,
+            "payload": "1" if value and action == "open" else "0",
+            "meta": meta_payload,
+        }
+
     if not mqtt_enabled():
-        raise RuntimeError("MQTT is not configured: set MQTT_HOST on the backend.")
+        raise RuntimeError("MQTT is not configured: set MQTT_BRIDGE_URL or MQTT_HOST on the backend.")
 
     if mqtt_publish is None:
         raise RuntimeError("MQTT dependency is missing. Install paho-mqtt on the backend.")
