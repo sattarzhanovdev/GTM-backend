@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 
+import requests
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -22,6 +25,32 @@ STATUS_TEXT_RU = {
     PaymentParticipation.Status.PAID: "Оплачено",
     PaymentParticipation.Status.PENDING: "На рассмотрении",
     PaymentParticipation.Status.ACCEPTED: "Принято",
+}
+
+logger = logging.getLogger(__name__)
+
+RECEIPT_DETECTOR_FAKE_MARKERS = {
+    "ai-generated",
+    "altered",
+    "fake",
+    "forged",
+    "fraud",
+    "fraudulent",
+    "generated",
+    "invalid",
+    "manipulated",
+    "synthetic",
+    "tampered",
+}
+RECEIPT_DETECTOR_REAL_MARKERS = {
+    "accepted",
+    "authentic",
+    "genuine",
+    "legit",
+    "legitimate",
+    "original",
+    "real",
+    "valid",
 }
 
 
@@ -54,6 +83,92 @@ def _parse_local_date(date_str: str):
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except Exception:
         return None
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes"}:
+            return True
+        if lowered in {"0", "false", "no"}:
+            return False
+    return None
+
+
+def _extract_fake_flag_from_detector_payload(payload) -> bool | None:
+    if isinstance(payload, list):
+        for item in payload:
+            result = _extract_fake_flag_from_detector_payload(item)
+            if result is not None:
+                return result
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("is_fake", "fake", "isFake", "forged", "fraudulent"):
+        if key in payload:
+            result = _coerce_bool(payload.get(key))
+            if result is not None:
+                return result
+
+    for key in ("is_authentic", "authentic", "is_real", "real", "genuine"):
+        if key in payload:
+            result = _coerce_bool(payload.get(key))
+            if result is not None:
+                return not result
+
+    for key in ("result", "prediction", "label", "verdict", "decision", "classification", "status"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in RECEIPT_DETECTOR_FAKE_MARKERS:
+                return True
+            if lowered in RECEIPT_DETECTOR_REAL_MARKERS:
+                return False
+
+    for value in payload.values():
+        if isinstance(value, (dict, list)):
+            result = _extract_fake_flag_from_detector_payload(value)
+            if result is not None:
+                return result
+
+    return None
+
+
+def _detect_receipt_status(receipt: Receipt) -> str:
+    detector_url = getattr(
+        settings,
+        "RECEIPT_DETECTOR_URL",
+        "https://receiptdetector.pythonanywhere.com/api/receipts/check/",
+    )
+    timeout = float(getattr(settings, "RECEIPT_DETECTOR_TIMEOUT", 20))
+
+    try:
+        with receipt.file.open("rb") as image_file:
+            response = requests.post(
+                detector_url,
+                files={"image": (receipt.file.name.rsplit("/", 1)[-1], image_file)},
+                timeout=timeout,
+            )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        logger.exception("Receipt detector request failed for receipt_id=%s", receipt.id)
+        return PaymentParticipation.Status.PENDING
+
+    is_fake = _extract_fake_flag_from_detector_payload(payload)
+    if is_fake is False:
+        return PaymentParticipation.Status.ACCEPTED
+    if is_fake is True:
+        return PaymentParticipation.Status.PENDING
+
+    logger.warning("Receipt detector returned unknown payload for receipt_id=%s: %r", receipt.id, payload)
+    return PaymentParticipation.Status.PENDING
 
 
 @require_GET
@@ -417,7 +532,7 @@ def payments_attach_receipt(request, payment_id: int):
         name = str(payload.get("name") or "receipt.jpg").strip() or "receipt.jpg"
         receipt = Receipt.objects.create(participation=part, file=ContentFile(content, name=name))
 
-    part.status = PaymentParticipation.Status.PENDING
+    part.status = _detect_receipt_status(receipt)
     part.status_updated_at = timezone.now()
     part.entrance = profile.entrance
     part.save(update_fields=["status", "status_updated_at", "entrance"])

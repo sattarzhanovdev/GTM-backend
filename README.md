@@ -62,6 +62,10 @@ Response: `{ token, user }`
 - `GET /api/payments/history/?date=YYYY-MM-DD`
 - `POST /api/payments/<id>/receipt/` (multipart field `file`)
 
+После загрузки чека backend отправляет файл в `RECEIPT_DETECTOR_URL` с полем `image`.
+Если детектор считает чек настоящим, статус оплаты становится `accepted` (`Принято`).
+Если детектор считает чек фейковым, не отвечает или возвращает непонятный формат, статус остаётся `pending` (`На рассмотрении`).
+
 ### Payments response fields
 
 `GET /api/payments/` returns items:
@@ -124,3 +128,8 @@ MQTT_BRIDGE_SECRET=change-me
 ```
 
 Тогда backend будет слать обычный HTTP POST в bridge, а bridge уже опубликует MQTT.
+
+### Receipt detector config
+
+- `RECEIPT_DETECTOR_URL` - URL API проверки чеков
+- `RECEIPT_DETECTOR_TIMEOUT` - timeout запроса в секундах

@@ -198,3 +198,10 @@ MQTT_RETAIN = os.environ.get("MQTT_RETAIN", "0")
 MQTT_BRIDGE_URL = os.environ.get("MQTT_BRIDGE_URL", "")
 MQTT_BRIDGE_SECRET = os.environ.get("MQTT_BRIDGE_SECRET", "")
 MQTT_BRIDGE_TIMEOUT = os.environ.get("MQTT_BRIDGE_TIMEOUT", "10")
+
+# Receipt detector
+RECEIPT_DETECTOR_URL = os.environ.get(
+    "RECEIPT_DETECTOR_URL",
+    "https://receiptdetector.pythonanywhere.com/api/receipts/check/",
+)
+RECEIPT_DETECTOR_TIMEOUT = os.environ.get("RECEIPT_DETECTOR_TIMEOUT", "20")
